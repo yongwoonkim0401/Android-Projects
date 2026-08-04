@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="경로 표시 지도 선택"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="위젯을 두 번 터치해 GPX 경로를 볼 때 사용할 지도입니다."
+            android:textSize="13sp"
+            android:textColor="#666666" />
+
+        <RadioGroup
+            android:id="@+id/rg_map"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical">
+
+            <RadioButton
+                android:id="@+id/rb_osm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="OpenStreetMap (API 키 불필요)"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rb_naver"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="네이버 지도 (API 키 필요)"
+                android:textSize="15sp" />
+
+            <RadioButton
+                android:id="@+id/rb_kakao"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="카카오맵 (API 키 필요)"
+                android:textSize="15sp" />
+
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/tv_key_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:padding="12dp"
+            android:background="#11000000"
+            android:textSize="13sp"
+            android:lineSpacingExtra="3dp" />
+
+    </LinearLayout>
+
+</ScrollView>

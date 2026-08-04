@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 다크 모드에서는 같은 연두 계열을 어둡게 낮추고 글자를 밝게 올린다. -->
+    <color name="key_function_background">#2C4A2E</color>
+    <color name="key_function_text">#C8E6C9</color>
+</resources>

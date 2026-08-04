@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>폰 CCTV</title>
+<style>
+  :root{
+    --bg:#0d120d; --card:#161d16; --line:#263126; --fg:#e8f3e8; --muted:#8fae8f;
+    --accent:#4caf50; --accent2:#2e7d32; --danger:#e05252;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif;
+       font-size:15px;line-height:1.5}
+  header{position:sticky;top:0;z-index:5;background:rgba(13,18,13,.95);
+         border-bottom:1px solid var(--line);padding:10px 14px;
+         display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  header h1{font-size:16px;margin:0;font-weight:700;margin-right:4px}
+  .pill{font-size:12px;padding:2px 9px;border-radius:999px;background:#1d271d;
+        border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+  .pill.on{color:#b7f0b7;border-color:var(--accent2)}
+  .pill.bad{color:#ffb4b4;border-color:#5a2626}
+  main{max-width:900px;margin:0 auto;padding:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+        padding:14px;margin-bottom:14px}
+  .card h2{font-size:13px;margin:0 0 12px;color:var(--muted);
+           text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  #view{position:relative;background:#000;border-radius:12px;overflow:hidden;
+        border:1px solid var(--line);margin-bottom:10px;min-height:180px}
+  #cam,#vid{display:block;width:100%;height:auto;background:#000}
+  #cam{display:none}
+  .mirrored{transform:scaleX(-1)}
+  #camMsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+          color:var(--muted);font-size:14px;pointer-events:none;text-align:center;padding:10px;
+          white-space:pre-line;line-height:1.6}
+  #modes{display:flex;gap:6px;margin-bottom:14px;align-items:center}
+  #modes .sp{margin-left:auto;font-size:12px;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+  button{font:inherit;font-size:14px;padding:11px 12px;border-radius:9px;cursor:pointer;
+         background:#1f2a1f;color:var(--fg);border:1px solid var(--line);
+         -webkit-tap-highlight-color:transparent}
+  button:active{transform:translateY(1px)}
+  button:disabled{opacity:.45}
+  button.primary{background:var(--accent2);border-color:var(--accent)}
+  button.danger{background:#3a1e1e;border-color:#5a2626;color:#ffc9c9}
+  button.on{background:var(--accent2);border-color:var(--accent);color:#fff}
+  #modes button{padding:7px 14px;font-size:13px;border-radius:999px}
+  label.row{display:flex;align-items:center;justify-content:space-between;gap:12px;
+            padding:8px 0;border-bottom:1px solid var(--line)}
+  label.row:last-child{border-bottom:none}
+  label.row span{color:var(--muted);font-size:14px}
+  select,input[type=number],input[type=text]{font:inherit;font-size:14px;background:#0f150f;
+    color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:110px}
+  input[type=range]{width:150px;accent-color:var(--accent)}
+  .files{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+  .file{background:#0f150f;border:1px solid var(--line);border-radius:9px;overflow:hidden;
+        font-size:11px;color:var(--muted)}
+  .file img{width:100%;height:78px;object-fit:cover;display:block;background:#000}
+  .file .meta{padding:5px 6px;display:flex;justify-content:space-between;align-items:center;gap:4px}
+  .file a{color:#9fd79f;text-decoration:none}
+  .file b{color:var(--danger);cursor:pointer;font-weight:400}
+  .tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .tabs button{padding:7px 13px;font-size:13px;border-radius:999px}
+  #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#233023;
+         border:1px solid var(--accent2);padding:9px 16px;border-radius:999px;font-size:13px;
+         opacity:0;transition:opacity .25s;pointer-events:none;z-index:20;max-width:90vw}
+  #toast.show{opacity:1}
+  #gate{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;
+        justify-content:center;z-index:30;padding:20px}
+  #gate .box{max-width:340px;width:100%;text-align:center}
+  #gate input{width:100%;margin:14px 0;text-align:center;letter-spacing:.12em}
+  .hint{color:var(--muted);font-size:12px;margin-top:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>폰 CCTV</h1>
+  <span class="pill" id="pState">연결 중…</span>
+  <span class="pill" id="pRate">-- kbps</span>
+  <span class="pill" id="pViewers">시청 0</span>
+  <span class="pill" id="pBattery">🔋 --</span>
+  <span class="pill" id="pMotion">감지 --</span>
+</header>
+
+<main>
+  <div id="view">
+    <video id="vid" autoplay muted playsinline></video>
+    <img id="cam" alt="live">
+    <div id="camMsg">스트림을 여는 중…</div>
+  </div>
+
+  <div id="modes">
+    <button id="mH264">H.264</button>
+    <button id="mMjpeg">MJPEG</button>
+    <button id="mSnap">스냅샷</button>
+    <select id="snapSec" style="display:none;min-width:0;padding:5px 8px">
+      <option value="3">3초</option>
+      <option value="5">5초</option>
+      <option value="10">10초</option>
+      <option value="30">30초</option>
+      <option value="60">60초</option>
+    </select>
+    <span class="sp" id="modeHint"></span>
+  </div>
+
+  <div class="card">
+    <h2>빠른 제어</h2>
+    <div class="grid">
+      <button id="bLens">카메라 전환</button>
+      <button id="bTorch">플래시 켜기</button>
+      <button id="bSnap">스냅샷 저장</button>
+      <button id="bRec" class="danger">녹화 시작</button>
+      <button id="bRotate">화면 회전</button>
+      <button id="bMirror">좌우 반전</button>
+      <button id="bReload">스트림 새로고침</button>
+      <button id="bRestart">카메라 재시작</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>H.264 스트림</h2>
+    <label class="row"><span>H.264 사용 (끄면 MJPEG 만)</span><input type="checkbox" id="fH264"></label>
+    <label class="row"><span>비트레이트 <i id="vBitrate">600</i> kbps</span>
+      <input type="range" id="fBitrate" min="100" max="3000" step="100">
+    </label>
+    <label class="row"><span>키프레임 간격 <i id="vKey">1</i> 초</span>
+      <input type="range" id="fKey" min="1" max="5" step="1">
+    </label>
+    <label class="row"><span>실제 사용량</span><span id="vKbps">-</span></label>
+    <p class="hint">비트레이트가 대역폭을 결정합니다. 실내 감시는 400~800 kbps 로 충분합니다.
+      키프레임 간격을 늘리면 대역폭이 줄지만 접속 시 첫 화면이 늦게 뜹니다.</p>
+  </div>
+
+  <div class="card">
+    <h2>영상 설정</h2>
+    <label class="row"><span>해상도</span>
+      <select id="fRes">
+        <option value="320x240">320 × 240 (가장 가벼움)</option>
+        <option value="640x480">640 × 480 (권장)</option>
+        <option value="800x600">800 × 600</option>
+        <option value="1280x720">1280 × 720 (HD)</option>
+        <option value="1920x1080">1920 × 1080 (풀HD)</option>
+      </select>
+    </label>
+    <label class="row"><span>회전</span>
+      <select id="fRotation">
+        <option value="0">0°</option><option value="90">90°</option>
+        <option value="180">180°</option><option value="270">270°</option>
+      </select>
+    </label>
+    <label class="row"><span>초당 프레임 <i id="vFps">10</i> (카메라 전체)</span>
+      <input type="range" id="fFps" min="1" max="30" step="1">
+    </label>
+    <label class="row"><span>MJPEG 화질 <i id="vQuality">60</i></span>
+      <input type="range" id="fQuality" min="20" max="95" step="5">
+    </label>
+    <p class="hint">초당 프레임은 카메라 촬영 속도 자체를 바꿉니다. <b>배터리에 가장 큰 영향</b>을 주므로
+      감시 용도라면 5~10 을 권합니다. 기기가 지원하지 않는 값이면 가장 가까운 값으로 적용됩니다.</p>
+  </div>
+
+  <div class="card">
+    <h2>전력</h2>
+    <label class="row"><span>카메라 실제 FPS 범위</span><span id="vFpsRange">-</span></label>
+    <label class="row"><span>인코딩 상태</span><span id="vEncoding">-</span></label>
+    <label class="row"><span>고성능 Wi‑Fi 잠금</span><input type="checkbox" id="fWifi"></label>
+    <p class="hint">고성능 Wi‑Fi 잠금은 절전을 꺼서 응답이 빨라지지만 전력을 많이 씁니다.
+      끊김이 잦을 때만 켜세요. 시청자가 없으면 인코딩 처리를 건너뛰어 자동으로 절전합니다.</p>
+  </div>
+
+  <div class="card">
+    <h2>움직임 감지</h2>
+    <label class="row"><span>감지 사용</span><input type="checkbox" id="fMotion"></label>
+    <label class="row"><span>민감도 <i id="vSens">40</i></span>
+      <input type="range" id="fSens" min="1" max="100" step="1">
+    </label>
+    <label class="row"><span>재감지 간격(초) <i id="vCool">10</i></span>
+      <input type="range" id="fCool" min="1" max="120" step="1">
+    </label>
+    <label class="row"><span>감지 시 사진 저장</span><input type="checkbox" id="fSaveShot"></label>
+    <label class="row"><span>누적 감지 횟수</span><span id="vMotionCount">0</span></label>
+  </div>
+
+  <div class="card">
+    <h2>저장된 파일</h2>
+    <div class="tabs">
+      <button data-type="events" class="on">감지 이벤트</button>
+      <button data-type="snapshots">스냅샷</button>
+      <button data-type="videos">녹화</button>
+      <button id="bClear" class="danger" style="margin-left:auto">전체 삭제</button>
+    </div>
+    <div class="files" id="files"></div>
+  </div>
+
+  <div class="card">
+    <h2>서버</h2>
+    <label class="row"><span>주소</span><span id="vUrl">-</span></label>
+    <label class="row"><span>H.264 해상도</span><span id="vActual">-</span></label>
+    <label class="row"><span>남은 저장공간</span><span id="vFree">-</span></label>
+    <label class="row"><span>가동 시간</span><span id="vUptime">-</span></label>
+    <label class="row"><span>오류</span><span id="vError">없음</span></label>
+    <div class="grid" style="margin-top:12px">
+      <button id="bLogout">토큰 지우기</button>
+      <button id="bStop" class="danger">CCTV 종료</button>
+    </div>
+    <p class="hint">외부(LTE)에서 보려면 Tailscale 같은 VPN 을 쓰세요. MJPEG 는 호환용이며
+      VLC 등에서는 <code>/stream.mjpeg?token=…</code> 을 그대로 열 수 있습니다.</p>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<div id="gate">
+  <div class="box">
+    <h2 style="margin:0;font-size:18px">접속 토큰 입력</h2>
+    <p class="hint">폰 앱 화면에 표시된 토큰을 넣어 주세요.</p>
+    <input type="text" id="gateInput" placeholder="예: 3f9a1c7b2d4e5f60" autocomplete="off">
+    <button class="primary" id="gateOk" style="width:100%">접속</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var state = null, mediaType = 'events', busy = false;
+  var mode = localStorage.getItem('cctv_mode') || 'h264';
+  var live = null;          // 현재 H.264 세션
+  var retryTimer = null, snapTimer = null, pollTimer = null;
+  var pollFails = 0, lastCounts = '';
+  var GIVE_UP_AFTER_MS = 300000;   // 5분 내내 실패하면 재시도를 멈춘다
+
+  // ---- 토큰 ---------------------------------------------------------------
+  function token() { return localStorage.getItem('cctv_token') || ''; }
+  function setToken(t) { localStorage.setItem('cctv_token', t); }
+
+  var urlToken = new URLSearchParams(location.search).get('token');
+  if (urlToken) {
+    setToken(urlToken);
+    history.replaceState(null, '', location.pathname);
+  }
+
+  function withToken(path) {
+    return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(token());
+  }
+
+  function gate(show) {
+    $('gate').style.display = show ? 'flex' : 'none';
+    if (show) $('gateInput').value = token();
+  }
+  $('gateOk').onclick = function () {
+    setToken($('gateInput').value.trim());
+    gate(false);
+    startStream();
+    poll().then(schedulePoll);
+    loadFiles();
+  };
+  $('gateInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('gateOk').click(); });
+
+  // ---- 통신 ---------------------------------------------------------------
+  function api(path, opts) {
+    return fetch(withToken(path), opts || {}).then(function (r) {
+      if (r.status === 401) { gate(true); throw new Error('unauthorized'); }
+      return r.json();
+    });
+  }
+  function post(path, body) {
+    return api(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : '{}'
+    });
+  }
+  function config(patch, reopen) {
+    busy = true;
+    return post('/api/config', patch)
+      .then(function (r) {
+        apply(r.status);
+        toast('적용됨');
+        if (reopen || r.rebound) setTimeout(startStream, 1500);
+      })
+      .catch(function (e) { toast('실패: ' + e.message); })
+      .then(function () { busy = false; });
+  }
+  function action(name, params) {
+    var q = '';
+    if (params) {
+      var ps = [];
+      for (var k in params) ps.push(k + '=' + encodeURIComponent(params[k]));
+      q = '?' + ps.join('&');
+    }
+    return post('/api/action/' + name + q)
+      .then(function (r) {
+        if (r.error) toast(r.error); else toast('완료');
+        if (r.status) apply(r.status);
+        return r;
+      })
+      .catch(function (e) { toast('실패: ' + e.message); return {}; });
+  }
+
+  var toastTimer;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.className = 'show';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.className = ''; }, 1800);
+  }
+  function msg(text) {
+    var m = $('camMsg');
+    m.onclick = null;
+    m.style.pointerEvents = 'none';
+    m.style.cursor = '';
+    if (text) { m.textContent = text; m.style.display = 'flex'; }
+    else { m.style.display = 'none'; }
+  }
+
+  /** 탭하면 다시 연결되는 안내. 재시도를 완전히 멈춘 상태에서 쓴다. */
+  function msgTapToRetry(text) {
+    var m = $('camMsg');
+    m.textContent = text;
+    m.style.display = 'flex';
+    m.style.pointerEvents = 'auto';
+    m.style.cursor = 'pointer';
+    m.onclick = function () { resume(); };
+  }
+
+  function resume() {
+    retryOk();
+    startStream();
+    poll().then(schedulePoll);
+  }
+
+  // ---- 스트림 공통 --------------------------------------------------------
+  var MODE_HINT = {
+    h264: '하드웨어 H.264 · 대역폭 절약',
+    mjpeg: 'MJPEG · 호환성 우선, 대역폭 많이 사용',
+    snapshot: '스냅샷 · 보는 폰 배터리 절약, 화면도 꺼짐'
+  };
+
+  function snapPeriod() {
+    return (parseInt(localStorage.getItem('cctv_snap_sec'), 10) || 5) * 1000;
+  }
+
+  function setMode(m) {
+    mode = m;
+    localStorage.setItem('cctv_mode', m);
+    $('mH264').className = m === 'h264' ? 'on' : '';
+    $('mMjpeg').className = m === 'mjpeg' ? 'on' : '';
+    $('mSnap').className = m === 'snapshot' ? 'on' : '';
+    $('snapSec').style.display = m === 'snapshot' ? '' : 'none';
+    $('modeHint').textContent = MODE_HINT[m] || '';
+    startStream();
+  }
+
+  function stopStream() {
+    if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+    if (snapTimer) { clearTimeout(snapTimer); snapTimer = null; }
+    if (live) {
+      live.stopped = true;
+      try { live.controller.abort(); } catch (e) {}
+      live = null;
+    }
+    var v = $('vid');
+    try { v.pause(); } catch (e) {}
+    try { v.removeAttribute('src'); v.load(); } catch (e) {}
+    var c = $('cam');
+    c.onerror = null; c.onload = null;
+    c.removeAttribute('src');
+  }
+
+  /*
+   * 재시도 정책.
+   *
+   * 예전에는 고정 3초로 영원히 재시도했다. VPN 을 끄거나 집을 나서서 CCTV 폰에
+   * 닿지 않게 되면, 보는 폰이 끝없이 무선을 깨워 배터리를 태운다. 그래서
+   *   (1) 간격을 3초 → 최대 60초로 늘리고
+   *   (2) 5분 넘게 계속 실패하면 아예 멈춘다(화면을 탭하거나 탭으로 돌아오면 재개).
+   */
+  var retryDelay = 3000;
+  var failStart = 0;
+  var givenUp = false;
+
+  function retry(why) {
+    if (!failStart) failStart = Date.now();
+    if (Date.now() - failStart > GIVE_UP_AFTER_MS) {
+      givenUp = true;
+      stopStream();
+      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+      msgTapToRetry('연결이 끊긴 지 5분이 지나 재시도를 멈췄습니다\n(배터리 절약) · 탭하면 다시 연결');
+      return;
+    }
+    msg('연결 끊김 (' + why + ') · ' + Math.round(retryDelay / 1000) + '초 후 재시도');
+    if (retryTimer) clearTimeout(retryTimer);
+    retryTimer = setTimeout(startStream, retryDelay);
+    retryDelay = Math.min(60000, Math.round(retryDelay * 1.8));
+  }
+
+  function retryOk() {
+    retryDelay = 3000;
+    failStart = 0;
+    givenUp = false;
+  }
+
+  function startStream() {
+    stopStream();
+    if ($('gate').style.display === 'flex') return;
+    if (mode === 'h264') {
+      $('vid').style.display = 'block';
+      $('cam').style.display = 'none';
+      startH264();
+    } else {
+      $('vid').style.display = 'none';
+      $('cam').style.display = 'block';
+      if (mode === 'snapshot') startSnapshot(); else startMjpeg();
+    }
+  }
+
+  // ---- MJPEG --------------------------------------------------------------
+  function startMjpeg() {
+    var cam = $('cam');
+    msg('스트림을 여는 중…');
+    cam.onload = function () { msg(''); retryOk(); };
+    cam.onerror = function () { retry('MJPEG'); };
+    cam.src = withToken('/stream.mjpeg') + '&t=' + Date.now();
+  }
+
+  // ---- 스냅샷(저전력) -----------------------------------------------------
+  // 연결을 유지하지 않고 N초마다 사진 한 장만 받는다. 무선이 대부분 잠들 수 있고
+  // 영상 재생이 아니라 화면도 정상적으로 꺼진다. 폰에서 잠깐 확인할 때 적합.
+  function startSnapshot() {
+    msg('스냅샷을 가져오는 중…');
+    var cam = $('cam');
+    function schedule() {
+      if (snapTimer) clearTimeout(snapTimer);
+      if (mode !== 'snapshot') return;
+      snapTimer = setTimeout(tick, snapPeriod());
+    }
+    function tick() {
+      if (mode !== 'snapshot' || document.hidden) { schedule(); return; }
+      cam.onload = function () { msg(''); retryOk(); schedule(); };
+      // 실패는 공통 재시도 정책(간격 증가 → 5분 뒤 중단)을 타게 한다.
+      cam.onerror = function () { retry('스냅샷'); };
+      cam.src = withToken('/snapshot.jpg') + '&t=' + Date.now();
+    }
+    tick();
+  }
+
+  // ---- H.264 (fMP4 + MSE) -------------------------------------------------
+  function startH264() {
+    if (!window.MediaSource || !window.AbortController || !window.fetch) {
+      toast('이 브라우저는 H.264 스트림을 지원하지 않아 MJPEG 로 전환합니다');
+      setMode('mjpeg');
+      return;
+    }
+    msg('H.264 스트림을 여는 중…');
+    api('/api/status').then(function (s) {
+      apply(s);
+      var h = s.stream && s.stream.h264;
+      if (!h || !h.enabled) {
+        toast('폰에서 H.264 가 꺼져 있어 MJPEG 로 전환합니다');
+        setMode('mjpeg');
+        return;
+      }
+      if (!h.codec) {
+        msg('인코더 준비 중… 잠시만 기다려 주세요');
+        retryTimer = setTimeout(startStream, 2000);
+        return;
+      }
+      var type = 'video/mp4; codecs="' + h.codec + '"';
+      if (!MediaSource.isTypeSupported(type)) {
+        toast(h.codec + ' 재생을 지원하지 않아 MJPEG 로 전환합니다');
+        setMode('mjpeg');
+        return;
+      }
+      openMse(type);
+    }).catch(function (e) {
+      if (e.message !== 'unauthorized') retry(e.message);
+    });
+  }
+
+  function openMse(type) {
+    var v = $('vid');
+    var ms = new MediaSource();
+    var st = { ms: ms, sb: null, queue: [], controller: new AbortController(), stopped: false };
+    live = st;
+    v.src = URL.createObjectURL(ms);
+
+    ms.addEventListener('sourceopen', function () {
+      if (st.stopped) return;
+      var sb;
+      try {
+        sb = ms.addSourceBuffer(type);
+      } catch (e) {
+        toast('SourceBuffer 생성 실패: ' + e.message);
+        setMode('mjpeg');
+        return;
+      }
+      try { sb.mode = 'segments'; } catch (e) {}
+      st.sb = sb;
+
+      function pump() {
+        if (st.stopped || sb.updating) return;
+        // 메모리가 무한정 늘지 않게 지나간 구간을 잘라 낸다.
+        try {
+          if (v.buffered.length && v.currentTime - v.buffered.start(0) > 15) {
+            sb.remove(v.buffered.start(0), v.currentTime - 8);
+            return;
+          }
+        } catch (e) {}
+        if (!st.queue.length) return;
+        var chunk = st.queue.shift();
+        try {
+          sb.appendBuffer(chunk);
+        } catch (e) {
+          if (e.name === 'QuotaExceededError') {
+            st.queue.unshift(chunk);
+            try { sb.remove(0, Math.max(0, v.currentTime - 4)); } catch (e2) {}
+          } else {
+            retry('append: ' + e.message);
+          }
+        }
+      }
+      sb.addEventListener('updateend', pump);
+      st.pump = pump;
+
+      fetch(withToken('/stream.mp4'), { signal: st.controller.signal }).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (!res.body || !res.body.getReader) throw new Error('스트리밍 미지원');
+        msg('');
+        retryOk();
+        var reader = res.body.getReader();
+        function read() {
+          reader.read().then(function (r) {
+            if (st.stopped) return;
+            if (r.done) { retry('서버 종료'); return; }
+            st.queue.push(r.value);
+            pump();
+            read();
+          }).catch(function () {
+            if (!st.stopped) retry('수신 중단');
+          });
+        }
+        read();
+      }).catch(function (e) {
+        if (!st.stopped && e.name !== 'AbortError') retry(e.message);
+      });
+    });
+  }
+
+  // ---- 절전: 탭이 가려지면 스트림을 끊는다 -------------------------------
+  // 브라우저는 탭이 숨겨져도 스트림 연결을 유지하기 때문에, 패널을 열어 둔 채
+  // 잊어버리면 폰이 계속 영상을 보내며 배터리를 태운다.
+  var hiddenSince = 0, suspended = false;
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      hiddenSince = Date.now();
+      if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    } else {
+      hiddenSince = 0;
+      // 사용자가 화면을 다시 보고 있다면 포기 상태에서도 한 번 더 시도한다.
+      if (suspended || givenUp) { suspended = false; resume(); return; }
+      poll().then(schedulePoll);
+    }
+  });
+
+  setInterval(function () {
+    if (document.hidden && !suspended && hiddenSince && Date.now() - hiddenSince > 60000) {
+      suspended = true;
+      stopStream();
+      msg('절전을 위해 스트림을 중단했습니다 · 화면으로 돌아오면 자동 재개');
+    }
+  }, 5000);
+
+  // 재생 위치가 뒤로 밀리면 라이브 지점으로 따라붙는다.
+  setInterval(function () {
+    if (document.hidden || mode !== 'h264' || !live || live.stopped) return;
+    var v = $('vid');
+    try {
+      if (v.buffered.length) {
+        var end = v.buffered.end(v.buffered.length - 1);
+        if (end - v.currentTime > 1.5) v.currentTime = end - 0.2;
+      }
+      if (v.paused) { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+    } catch (e) {}
+  }, 2000);
+
+  // ---- 상태 반영 ----------------------------------------------------------
+  function fmtTime(sec) {
+    sec = Math.floor(sec);
+    var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+    return (h ? h + '시간 ' : '') + (m ? m + '분 ' : '') + s + '초';
+  }
+
+  function apply(s) {
+    if (!s) return;
+    state = s;
+    var h = (s.stream && s.stream.h264) || {};
+    var j = (s.stream && s.stream.mjpeg) || {};
+
+    $('pState').textContent = s.bound ? (h.ready || !h.enabled ? '동작 중' : 'H.264 준비 중') : '카메라 준비 중';
+    $('pState').className = 'pill ' + (s.bound ? 'on' : 'bad');
+    $('pRate').textContent = mode === 'snapshot'
+      ? (snapPeriod() / 1000) + '초 간격'
+      : mode === 'h264'
+        ? (h.kbps ? h.kbps + ' kbps' : '-- kbps')
+        : (j.fps + ' fps');
+    $('pViewers').textContent = '시청 ' + s.viewers;
+    if (s.battery) {
+      $('pBattery').textContent = (s.battery.charging ? '⚡ ' : '🔋 ') + s.battery.percent + '%';
+      $('pBattery').className = 'pill ' + (s.battery.percent < 20 && !s.battery.charging ? 'bad' : '');
+    }
+    var m = s.motion || {};
+    $('pMotion').textContent = m.enabled ? '감지 ' + Math.round(m.score * 1000) / 10 + '%' : '감지 끔';
+    $('pMotion').className = 'pill ' + (m.enabled && m.score > 0.02 ? 'on' : '');
+
+    $('bTorch').textContent = s.torch.on ? '플래시 끄기' : '플래시 켜기';
+    $('bTorch').className = s.torch.on ? 'on' : '';
+    $('bTorch').disabled = !s.torch.available;
+    $('bLens').textContent = s.lens === 'front' ? '후면으로 전환' : '전면으로 전환';
+    $('bRec').textContent = s.recording.active
+      ? '녹화 중지 (' + fmtTime(s.recording.elapsed) + ' / ' + s.recording.sizeMb + 'MB)'
+      : '녹화 시작';
+    $('bRec').className = s.recording.active ? 'on' : 'danger';
+    $('bRec').disabled = !h.enabled;
+    $('bMirror').className = s.mirror ? 'on' : '';
+
+    // H.264 는 좌우 반전을 픽셀에 넣지 않으므로 표시할 때 뒤집는다.
+    $('vid').className = s.mirror ? 'mirrored' : '';
+
+    if (!busy) {
+      $('fRes').value = s.configWidth + 'x' + s.configHeight;
+      $('fQuality').value = j.quality; $('vQuality').textContent = j.quality;
+      $('fFps').value = j.targetFps; $('vFps').textContent = j.targetFps;
+      $('fRotation').value = s.rotation;
+      $('fH264').checked = !!h.enabled;
+      $('fWifi').checked = !!(s.power && s.power.highPerfWifi);
+      $('fBitrate').value = h.bitrateKbps; $('vBitrate').textContent = h.bitrateKbps;
+      $('fKey').value = h.keyInterval; $('vKey').textContent = h.keyInterval;
+      $('fMotion').checked = !!m.enabled;
+      $('fSens').value = m.sensitivity; $('vSens').textContent = m.sensitivity;
+      $('fCool').value = m.cooldown; $('vCool').textContent = m.cooldown;
+      $('fSaveShot').checked = !!m.saveShot;
+    }
+    var pw = s.power || {};
+    $('vFpsRange').textContent = pw.fpsRange ? pw.fpsRange + ' fps' : '기기 미지원(제한 없음)';
+    $('vEncoding').textContent = pw.encoding ? '전송 중' : '절전 (시청자 없음)';
+    $('vKbps').textContent = h.kbps ? h.kbps + ' kbps (' + Math.round(h.kbps / 8) + ' KB/s)' : '-';
+    // 파일 목록은 개수가 실제로 바뀌었을 때만 다시 받는다.
+    // 주기적으로 새로 그리면 썸네일 수십 장을 계속 다시 내려받게 된다.
+    var counts = s.storage.events + '/' + s.storage.snapshots + '/' + s.storage.videos;
+    if (lastCounts && counts !== lastCounts) loadFiles();
+    lastCounts = counts;
+
+    $('vMotionCount').textContent = m.count || 0;
+    $('vUrl').textContent = s.url;
+    $('vActual').textContent = h.width ? h.width + ' × ' + h.height + ' · 회전 ' + h.rotation + '°' : '-';
+    $('vFree').textContent = s.storage.freeMb + ' MB';
+    $('vUptime').textContent = fmtTime(s.uptime);
+    $('vError').textContent = s.error || '없음';
+  }
+
+  function poll() {
+    return api('/api/status').then(function (s) {
+      pollFails = 0;
+      apply(s);
+    }).catch(function () {
+      pollFails++;
+      $('pState').textContent = '연결 끊김';
+      $('pState').className = 'pill bad';
+    });
+  }
+
+  /**
+   * 상태 조회 주기. 고정 2초로 계속 두드리면 보는 폰의 무선이 잠들지 못한다.
+   *  - 숨은 탭: 아예 예약하지 않는다(visibilitychange 에서 재개)
+   *  - 실패 중: 점점 늘려 최대 30초
+   *  - 스냅샷 모드: 사진 주기에 맞춘다
+   */
+  function pollDelay() {
+    if (pollFails > 0) return Math.min(30000, 2000 * Math.pow(2, pollFails));
+    if (mode === 'snapshot') return Math.max(5000, snapPeriod());
+    return 2000;
+  }
+
+  function schedulePoll() {
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    if (givenUp || document.hidden || $('gate').style.display === 'flex') return;
+    pollTimer = setTimeout(function () {
+      poll().then(schedulePoll);
+    }, pollDelay());
+  }
+
+  // ---- 파일 ---------------------------------------------------------------
+  function loadFiles() {
+    api('/api/media/' + mediaType + '?limit=60').then(function (r) {
+      var box = $('files');
+      box.innerHTML = '';
+      if (!r.items || !r.items.length) {
+        box.innerHTML = '<div style="color:#8fae8f;font-size:13px">저장된 파일이 없습니다.</div>';
+        return;
+      }
+      r.items.forEach(function (it) {
+        var d = document.createElement('div');
+        d.className = 'file';
+        var when = new Date(it.at);
+        var label = ('0' + when.getHours()).slice(-2) + ':' + ('0' + when.getMinutes()).slice(-2);
+        var thumb = mediaType === 'videos'
+          ? '<div style="height:78px;display:flex;align-items:center;justify-content:center;font-size:24px">🎬</div>'
+          : '<img loading="lazy" src="' + withToken(it.url) + '">';
+        d.innerHTML = thumb +
+          '<div class="meta"><a href="' + withToken(it.url) + '" target="_blank">' + label + '</a>' +
+          '<b data-name="' + it.name + '">삭제</b></div>';
+        box.appendChild(d);
+      });
+      Array.prototype.forEach.call(box.querySelectorAll('b'), function (b) {
+        b.onclick = function () {
+          post('/api/media/' + mediaType + '/delete?name=' + encodeURIComponent(b.getAttribute('data-name')))
+            .then(loadFiles);
+        };
+      });
+    }).catch(function () {});
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.tabs button[data-type]'), function (b) {
+    b.onclick = function () {
+      mediaType = b.getAttribute('data-type');
+      Array.prototype.forEach.call(document.querySelectorAll('.tabs button[data-type]'),
+        function (x) { x.className = ''; });
+      b.className = 'on';
+      loadFiles();
+    };
+  });
+  $('bClear').onclick = function () {
+    if (!confirm(mediaType + ' 폴더의 파일을 모두 지울까요?')) return;
+    post('/api/media/' + mediaType + '/clear').then(function () { toast('삭제됨'); loadFiles(); });
+  };
+
+  // ---- 버튼 ---------------------------------------------------------------
+  $('mH264').onclick = function () { setMode('h264'); };
+  $('mMjpeg').onclick = function () { setMode('mjpeg'); };
+  $('mSnap').onclick = function () { setMode('snapshot'); schedulePoll(); };
+
+  $('bLens').onclick = function () {
+    action('lens', { lens: state && state.lens === 'front' ? 'back' : 'front' })
+      .then(function () { setTimeout(startStream, 1500); });
+  };
+  $('bTorch').onclick = function () { action('torch', { on: !(state && state.torch.on) }); };
+  $('bSnap').onclick = function () {
+    action('snapshot').then(function () { if (mediaType === 'snapshots') loadFiles(); });
+  };
+  $('bRec').onclick = function () {
+    action('record', { on: !(state && state.recording.active) })
+      .then(function () { setTimeout(loadFiles, 1500); });
+  };
+  $('bRotate').onclick = function () {
+    config({ rotation: ((state ? state.rotation : 0) + 90) % 360 });
+  };
+  $('bMirror').onclick = function () { config({ mirror: !(state && state.mirror) }); };
+  $('bReload').onclick = startStream;
+  $('bRestart').onclick = function () {
+    action('restart').then(function () { setTimeout(startStream, 2000); });
+  };
+  $('bStop').onclick = function () {
+    if (confirm('폰에서 CCTV 서비스를 종료합니다. 계속할까요?')) action('stop');
+  };
+  $('bLogout').onclick = function () { stopStream(); localStorage.removeItem('cctv_token'); gate(true); };
+
+  $('fRes').onchange = function () { config({ resolution: this.value }, true); };
+  $('fRotation').onchange = function () { config({ rotation: parseInt(this.value, 10) }); };
+  $('fH264').onchange = function () { config({ h264Enabled: this.checked }, true); };
+  $('fWifi').onchange = function () { config({ highPerfWifi: this.checked }); };
+  $('fMotion').onchange = function () { config({ motionEnabled: this.checked }); };
+  $('fSaveShot').onchange = function () { config({ motionSaveShot: this.checked }); };
+
+  function slider(id, label, key, reopen) {
+    var el = $(id);
+    el.oninput = function () { $(label).textContent = el.value; busy = true; };
+    el.onchange = function () {
+      var p = {};
+      p[key] = parseInt(el.value, 10);
+      config(p, reopen);
+    };
+  }
+  slider('fQuality', 'vQuality', 'quality');
+  slider('fFps', 'vFps', 'fps', true);   // 카메라 세션을 다시 여므로 스트림도 재접속
+  slider('fBitrate', 'vBitrate', 'bitrateKbps');
+  slider('fKey', 'vKey', 'keyInterval', true);
+  slider('fSens', 'vSens', 'motionSensitivity');
+  slider('fCool', 'vCool', 'motionCooldown');
+
+  // ---- 시작 ---------------------------------------------------------------
+  $('snapSec').value = String(snapPeriod() / 1000);
+  $('snapSec').onchange = function () {
+    localStorage.setItem('cctv_snap_sec', this.value);
+    startStream();
+    schedulePoll();
+  };
+
+  fetch('/api/ping').then(function (r) { return r.json(); }).then(function (p) {
+    if (p.authRequired && !token()) { gate(true); setMode(mode); return; }
+    setMode(mode);
+    poll().then(schedulePoll);
+    loadFiles();
+  }).catch(function () { toast('서버에 연결할 수 없습니다'); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 입체 인공위성 아이콘 (수집 OFF: 불이 꺼진 상태) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="56dp"
+    android:height="56dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- ===== 왼쪽 태양광 패널 (전원 꺼진 듯 어둡게, 입체 유지) ===== -->
+    <path android:pathData="M0.8,9.3 h6.6 v4.2 h-6.6 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="0.8" android:startY="9.3"
+                android:endX="7.4" android:endY="13.5"
+                android:startColor="#78909C" android:endColor="#2E3B43" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#1A2327" android:pathData="M0.8,13.5 h6.6 v0.7 h-6.6 z" />
+    <path android:strokeColor="#1F2A30" android:strokeWidth="0.3"
+        android:pathData="M3,9.3 V13.5 M5.2,9.3 V13.5 M0.8,11.4 H7.4" />
+    <path android:fillColor="#1FFFFFFF" android:pathData="M0.8,9.3 L3.6,9.3 L1.9,13.5 L0.8,13.5 z" />
+
+    <!-- ===== 오른쪽 태양광 패널 ===== -->
+    <path android:pathData="M16.6,9.3 h6.6 v4.2 h-6.6 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="16.6" android:startY="9.3"
+                android:endX="23.2" android:endY="13.5"
+                android:startColor="#607D8B" android:endColor="#263238" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#1A2327" android:pathData="M16.6,13.5 h6.6 v0.7 h-6.6 z" />
+    <path android:strokeColor="#1F2A30" android:strokeWidth="0.3"
+        android:pathData="M18.8,9.3 V13.5 M21,9.3 V13.5 M16.6,11.4 H23.2" />
+    <path android:fillColor="#17FFFFFF" android:pathData="M16.6,9.3 L19.4,9.3 L17.7,13.5 L16.6,13.5 z" />
+
+    <!-- 패널-본체 연결봉 -->
+    <path android:pathData="M7.4,11 h1.9 v2 h-1.9 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="0" android:startY="11" android:endX="0" android:endY="13"
+                android:startColor="#78909C" android:endColor="#37474F" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M14.7,11 h1.9 v2 h-1.9 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="0" android:startY="11" android:endX="0" android:endY="13"
+                android:startColor="#607D8B" android:endColor="#263238" />
+        </aapt:attr>
+    </path>
+
+    <!-- ===== 안테나 마스트 + 접시(반경 2배, 반구 음영) ===== -->
+    <path android:fillColor="#546E7A" android:pathData="M11.55,6.5 h0.9 v2.5 h-0.9 z" />
+    <path android:pathData="M7.8,4.2 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="10" android:centerY="2.6" android:gradientRadius="6"
+                android:startColor="#B0BEC5" android:endColor="#37474F" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#1F2A30"
+        android:pathData="M10.4,4.2 a1.6,1.6 0 1,0 3.2,0 a1.6,1.6 0 1,0 -3.2,0 z" />
+
+    <!-- ===== 위성 본체 (금속 원통형, 전체적으로 어둡게) ===== -->
+    <path android:pathData="M8.2,8.2 h7.6 v7.6 h-7.6 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear"
+                android:startX="8.2" android:startY="0" android:endX="15.8" android:endY="0">
+                <item android:offset="0" android:color="#37474F" />
+                <item android:offset="0.45" android:color="#90A4AE" />
+                <item android:offset="1" android:color="#2E3B43" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#40FFFFFF" android:pathData="M8.2,8.2 h7.6 v0.9 h-7.6 z" />
+    <path android:fillColor="#66161E22" android:pathData="M8.2,14.9 h7.6 v0.9 h-7.6 z" />
+
+    <!-- ===== 꺼진 불 (발광 없음, 어두운 렌즈 + 약한 하이라이트) ===== -->
+    <path android:pathData="M9.9,12 a2.1,2.1 0 1,0 4.2,0 a2.1,2.1 0 1,0 -4.2,0 z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial"
+                android:centerX="11.4" android:centerY="11.4" android:gradientRadius="2.6"
+                android:startColor="#546E7A" android:endColor="#1F2A30" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#40FFFFFF"
+        android:pathData="M10.8,11.1 a0.55,0.55 0 1,0 1.1,0 a0.55,0.55 0 1,0 -1.1,0 z" />
+</vector>

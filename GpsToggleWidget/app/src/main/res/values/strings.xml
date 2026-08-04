@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GPS Toggle Widget</string>
+    <string name="widget_description">GPS 위치 정보 수집을 시작/중지합니다</string>
+    <string name="gps_on">수집 ON</string>
+    <string name="gps_off">수집 OFF</string>
+    <string name="gps_icon_desc">GPS 상태 아이콘</string>
+</resources>

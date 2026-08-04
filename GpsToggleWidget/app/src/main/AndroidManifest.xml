@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 위도/경도/고도 조회용 (앱에서 사용자가 직접 허용) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <!-- 위치 수집 포그라운드 서비스 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- GPX 뷰어 지도 타일 로딩용 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_sat_on"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.AppCompat.Light">
+
+        <!-- 권한 요청용 메인 화면 (일반 앱과 동일한 방식) -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 수집 토글용 투명 Activity (위젯 싱글클릭, 화면에 보이지 않음) -->
+        <activity
+            android:name=".ToggleActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:launchMode="singleInstance"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- GPX 경로 뷰어 (위젯 더블클릭으로 열림)
+             독립 태스크로 격리 → 닫을 때 MainActivity가 아니라 홈 화면으로 복귀 -->
+        <activity
+            android:name=".GpxViewerActivity"
+            android:exported="false"
+            android:label="GPX 경로 보기"
+            android:taskAffinity=""
+            android:excludeFromRecents="true" />
+
+        <!-- 지도 선택 설정 (위젯 트리플클릭으로 열림) -->
+        <activity
+            android:name=".MapSettingsActivity"
+            android:exported="false"
+            android:label="지도 설정"
+            android:taskAffinity=""
+            android:excludeFromRecents="true" />
+
+        <!-- 위치 수집 서비스 -->
+        <service
+            android:name=".LocationTrackingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <!-- Widget Provider -->
+        <receiver
+            android:name=".GpsToggleWidget"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.gpstogglewidget.ACTION_TOGGLE_TRACKING" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!-- GPS State Change Receiver -->
+        <receiver
+            android:name=".GpsStateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.location.PROVIDERS_CHANGED" />
+                <action android:name="android.location.MODE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+
+</manifest>

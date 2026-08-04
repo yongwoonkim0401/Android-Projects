@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="key_margin">3dp</dimen>
+    <!-- 키 한 개의 높이. 여백을 더한 한 줄 간격은 42+3+3 = 48dp 가 된다. -->
+    <dimen name="key_height">42dp</dimen>
+</resources>

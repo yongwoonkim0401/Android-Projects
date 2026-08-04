@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Analog bathroom scale icon -->
+    <!-- Scale body platform (white rounded rect) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M16,60 Q16,56 20,56 L88,56 Q92,56 92,60 L92,84 Q92,88 88,88 L20,88 Q16,88 16,84 Z" />
+
+    <!-- Scale dial: outer semicircle (white) centered at (54,56), r=38 -->
+    <!-- M(54-38),56 A38,38 0 0,1 (54+38),56 = M16,56 A38,38 0 0,1 92,56 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M16,56 A38,38 0 0,1 92,56 Z" />
+
+    <!-- Scale dial: inner cutout (background color) r=28 -->
+    <!-- M(54-28),56 A28,28 0 0,1 (54+28),56 = M26,56 A28,28 0 0,1 82,56 -->
+    <path
+        android:fillColor="#1976D2"
+        android:pathData="M26,56 A28,28 0 0,1 82,56 Z" />
+
+    <!-- Tick marks on the dial (white marks on blue cutout area) -->
+    <!-- Left tick -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M26,56 L30,56" />
+    <!-- Right tick -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M78,56 L82,56" />
+    <!-- Top tick -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,18 L54,22" />
+    <!-- Upper-left tick (at ~135 degrees from right = 45 degrees from top-left) -->
+    <!-- 54 + 33*cos(135°) = 54 - 23.3 = 30.7, 56 - 33*sin(135°... wait, angle from 3oclock) -->
+    <!-- Let's use 150° from 3oclock (upper-left area): 54+33*cos(150°)=54-28.6=25.4, 56-33*sin(150°)=56-16.5=39.5 -->
+    <!-- 120° from 3oclock: 54+33*cos(120°)=54-16.5=37.5, 56-33*sin(120°)=56-28.6=27.4 -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M31.5,40 L34,44" />
+    <!-- Upper-right tick (60° from 3oclock) -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M76.5,40 L74,44" />
+
+    <!-- Needle pointing slightly left of center (about 130° = slightly above horizontal left) -->
+    <!-- Needle tip at: 54 + 22*cos(130°) = 54-14.1=39.9, 56 - 22*sin(130°) = 56-16.8=39.2 -->
+    <path
+        android:strokeColor="#FF5252"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M54,56 L40,39" />
+
+    <!-- Needle center circle (white outline) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,56 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <!-- Needle center circle (red fill) -->
+    <path
+        android:fillColor="#FF5252"
+        android:pathData="M54,56 m-2.5,0 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0" />
+
+    <!-- Digital display on platform -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M28,62 L80,62 Q82,62 82,64 L82,78 Q82,80 80,80 L28,80 Q26,80 26,78 L26,64 Q26,62 28,62 Z" />
+
+    <!-- Display: weight number lines -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M34,68 L34,76" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M34,68 L40,68" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M40,68 L40,76" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M34,76 L40,76" />
+
+    <!-- Decimal point -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M43,74 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
+
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M46,76 L50,68" />
+
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M54,68 L60,68 M54,68 L54,76 M54,76 L60,76 M60,68 L60,76" />
+
+    <!-- "kg" label (small) -->
+    <path
+        android:strokeColor="#90CAF9"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M65,68 L65,76 M65,72 L68,68 M65,72 L68,76" />
+    <path
+        android:strokeColor="#90CAF9"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M70,70 A2,3 0 0,1 74,70 A2,3 0 0,1 70,73 L74,76" />
+
+    <!-- Feet at bottom -->
+    <path
+        android:fillColor="#E0E0E0"
+        android:pathData="M20,86 L34,86 L34,92 L20,92 Z" />
+    <path
+        android:fillColor="#E0E0E0"
+        android:pathData="M74,86 L88,86 L88,92 L74,92 Z" />
+
+</vector>

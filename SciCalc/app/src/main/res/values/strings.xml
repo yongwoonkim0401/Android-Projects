@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">공학용 계산기</string>
+
+    <string name="mem_clear">MC</string>
+    <string name="mem_recall">MR</string>
+    <string name="mem_add">M+</string>
+    <string name="mem_subtract">M−</string>
+    <string name="history">기록</string>
+    <string name="history_empty">계산 기록이 없습니다.</string>
+    <string name="history_title">계산 기록</string>
+    <string name="history_clear">기록 지우기</string>
+    <string name="close">닫기</string>
+
+    <string name="computing">계산 중…</string>
+    <string name="char_count">%1$d자</string>
+    <string name="limit_reached">입력할 수 있는 최대 길이에 도달했습니다.</string>
+    <string name="parens_closed">괄호 %1$d개를 자동으로 닫았습니다.</string>
+    <string name="memory_changed">메모리: %1$s</string>
+
+    <string name="err_syntax">수식 형식이 올바르지 않습니다</string>
+    <string name="err_unbalanced">괄호의 짝이 맞지 않습니다</string>
+    <string name="err_bad_char">사용할 수 없는 문자가 있습니다</string>
+    <string name="err_div_zero">0으로 나눌 수 없습니다</string>
+    <string name="err_domain">정의역을 벗어났습니다</string>
+    <string name="err_overflow">표시할 수 있는 범위를 넘었습니다</string>
+    <string name="err_arity">함수의 인자 개수가 맞지 않습니다</string>
+    <string name="err_empty">수식을 입력하세요</string>
+    <string name="err_too_complex">수식이 너무 복잡합니다</string>
+    <string name="err_at_position">%1$s (%2$d번째 문자)</string>
+
+    <string name="cd_angle_mode">각도 단위 전환</string>
+    <string name="cd_history">계산 기록 열기</string>
+</resources>

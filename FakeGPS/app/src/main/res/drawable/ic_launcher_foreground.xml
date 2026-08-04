@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Signal arcs (top-right), hinting at a broadcast/GPS signal -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeAlpha="0.55"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M70,33 a11,11 0 0 1 8,8" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:strokeAlpha="0.35"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M72,26 a19,19 0 0 1 14,14" />
+
+    <!-- Location pin (white) with a hollow center -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,26C42.06,26 34,34.06 34,44c0,13.5 18,40 18,40s18,-26.5 18,-40c0,-9.94 -8.06,-18 -18,-18zM52,50.5a6.5,6.5 0,1 1,0 -13a6.5,6.5 0,0 1,0 13z" />
+
+    <!-- Red GPS point in the pin's center -->
+    <path
+        android:fillColor="#FFFF5252"
+        android:pathData="M52,44m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+</vector>

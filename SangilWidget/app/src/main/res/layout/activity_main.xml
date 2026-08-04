@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="20dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="산길샘 위젯 설정"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:paddingBottom="20dp" />
+
+        <!-- 접근성 서비스 상태 -->
+        <TextView
+            android:id="@+id/tv_acc_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="접근성 서비스 확인 중..."
+            android:textSize="14sp"
+            android:paddingBottom="8dp" />
+
+        <Button
+            android:id="@+id/btn_open_accessibility"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="접근성 서비스 설정 열기"
+            android:layout_marginBottom="24dp" />
+
+        <!-- 패키지명 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="산길샘 패키지명"
+            android:textSize="13sp"
+            android:textColor="#555555" />
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="(adb shell pm list packages | grep sangil 으로 확인)"
+            android:textSize="11sp"
+            android:textColor="#888888"
+            android:paddingBottom="4dp" />
+        <EditText
+            android:id="@+id/et_package"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="com.sangil.sangilsam"
+            android:inputType="text"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 시작 버튼 텍스트 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="'등산 시작' 버튼 텍스트 (앱 화면에 표시된 글자)"
+            android:textSize="13sp"
+            android:textColor="#555555"
+            android:paddingBottom="4dp" />
+        <EditText
+            android:id="@+id/et_btn_start"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="저장 시작"
+            android:inputType="text"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 종료 버튼 텍스트 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="'등산 종료' 버튼 텍스트 (앱 화면에 표시된 글자)"
+            android:textSize="13sp"
+            android:textColor="#555555"
+            android:paddingBottom="4dp" />
+        <EditText
+            android:id="@+id/et_btn_stop"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="등산 끝"
+            android:inputType="text"
+            android:layout_marginBottom="24dp" />
+
+        <Button
+            android:id="@+id/btn_save"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="설정 저장" />
+
+        <!-- 사용 방법 안내 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="\n[ 사용 방법 ]\n1. 접근성 서비스를 활성화하세요\n   (설정 → 접근성 → 설치된 앱 → 산길샘 위젯)\n2. 홈 화면에 위젯을 추가하세요\n   (홈 화면 빈 곳 길게 누르기 → 위젯 → 산길샘 위젯)\n3. 산길샘 앱의 실제 버튼 텍스트를 위에 입력하세요\n4. 위젯 버튼을 누르면 산길샘이 자동으로 열리고\n   해당 버튼이 눌립니다"
+            android:textSize="13sp"
+            android:textColor="#444444"
+            android:lineSpacingExtra="4dp" />
+
+    </LinearLayout>
+</ScrollView>

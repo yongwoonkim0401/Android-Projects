@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AndroidCCTV" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">#1B5E20</item>
+        <item name="colorPrimaryDark">#0B3D0B</item>
+        <item name="colorAccent">#4CAF50</item>
+    </style>
+</resources>

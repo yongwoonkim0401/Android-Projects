@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <!-- ── 표시부 ───────────────────────────────────────────────────── -->
+    <!-- 키패드는 키 높이(@dimen/key_height)에 따라 필요한 만큼만 차지하고,
+         남는 공간을 전부 표시부가 받는다. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="8dp">
+
+        <!-- 상태/메모리 줄 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonAngleMode"
+                style="@style/Widget.SciCalc.SmallKey"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/cd_angle_mode"
+                android:text="DEG" />
+
+            <TextView
+                android:id="@+id/textMemoryIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="6dp"
+                android:text="M"
+                android:textColor="?attr/colorPrimary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:visibility="invisible"
+                tools:visibility="visible" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonMemClear"
+                style="@style/Widget.SciCalc.SmallKey"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mem_clear" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonMemRecall"
+                style="@style/Widget.SciCalc.SmallKey"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mem_recall" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonMemAdd"
+                style="@style/Widget.SciCalc.SmallKey"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mem_add" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonMemSubtract"
+                style="@style/Widget.SciCalc.SmallKey"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/mem_subtract" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonHistory"
+                style="@style/Widget.SciCalc.SmallKey"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:contentDescription="@string/cd_history"
+                android:text="@string/history" />
+        </LinearLayout>
+
+        <!-- 수식: 커서 주변 구간만 그린다 -->
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/textExpression"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:breakStrategy="simple"
+            android:gravity="bottom|end"
+            android:hyphenationFrequency="none"
+            android:maxLines="3"
+            android:scrollbars="none"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="28sp"
+            app:autoSizeMaxTextSize="30sp"
+            app:autoSizeMinTextSize="15sp"
+            app:autoSizeStepGranularity="1sp"
+            app:autoSizeTextType="uniform"
+            tools:text="12+sin(30)×2" />
+
+        <!-- 결과 미리보기 / 오류 -->
+        <TextView
+            android:id="@+id/textPreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="end"
+            android:maxLines="1"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="22sp"
+            tools:text="= 13" />
+
+        <TextView
+            android:id="@+id/textStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:paddingBottom="4dp"
+            android:textColor="?attr/colorOutline"
+            android:textSize="11sp"
+            tools:text="128자" />
+    </LinearLayout>
+
+    <!-- ── 키패드 ───────────────────────────────────────────────────── -->
+    <androidx.gridlayout.widget.GridLayout
+        android:id="@+id/gridKeypad"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="6dp"
+        app:columnCount="5"
+        app:rowCount="8" />
+
+</LinearLayout>

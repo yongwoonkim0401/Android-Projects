@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      함수 키 색. 나머지 키는 Material 테마 색(colorSecondaryContainer 등)을 따라가지만
+      함수 키만은 한눈에 구분되도록 고정 연두색을 쓴다.
+      다크 모드용은 values-night/colors.xml 에 따로 있다.
+    -->
+    <color name="key_function_background">#DCEDC8</color>
+    <color name="key_function_text">#1B5E20</color>
+</resources>
