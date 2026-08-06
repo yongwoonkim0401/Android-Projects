@@ -37,7 +37,7 @@ class MockLocationService : Service() {
     private var fused: FusedLocationProviderClient? = null
 
     private val handler = Handler(Looper.getMainLooper())
-    private val intervalMs = 1000L
+    private val intervalMs = TICK_INTERVAL_MS
 
     private val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
     private var providersReady = false
@@ -48,6 +48,10 @@ class MockLocationService : Service() {
     private var bearing = 0f
     private var speed = 0f          // m/s
     private var moving = false
+
+    // Road route to follow (set via updateRoute); null means "just move along bearing/speed"
+    private var route: List<GeoPoint>? = null
+    private var routeSegmentIndex = 0
 
     /** Called on the main thread after each push so the UI can follow along. */
     var onPush: ((GeoPoint, Float, Boolean) -> Unit)? = null
@@ -60,7 +64,11 @@ class MockLocationService : Service() {
             val p = point
             if (p != null) {
                 val next = if (moving && speed > 0f) {
-                    p.destinationPoint(speed * (intervalMs / 1000.0), bearing.toDouble())
+                    if (route != null) {
+                        advanceAlongRoute(p, speed * (intervalMs / 1000.0))
+                    } else {
+                        p.destinationPoint(speed * (intervalMs / 1000.0), bearing.toDouble())
+                    }
                 } else p
                 point = next
                 push(next)
@@ -68,6 +76,31 @@ class MockLocationService : Service() {
             }
             handler.postDelayed(this, intervalMs)
         }
+    }
+
+    /** Walks [distanceMeters] forward along [route] from [from], crossing waypoints as needed. */
+    private fun advanceAlongRoute(from: GeoPoint, distanceMeters: Double): GeoPoint {
+        val pts = route ?: return from
+        var current = from
+        var remaining = distanceMeters
+        var idx = routeSegmentIndex
+        while (remaining > 0.0 && idx < pts.size) {
+            val target = pts[idx]
+            val segDist = current.distanceToAsDouble(target)
+            if (segDist <= remaining) {
+                remaining -= segDist
+                current = target
+                idx++
+            } else {
+                val brng = current.bearingTo(target)
+                bearing = brng.toFloat()
+                current = current.destinationPoint(remaining, brng)
+                remaining = 0.0
+            }
+        }
+        routeSegmentIndex = idx
+        if (idx >= pts.size) moving = false // reached the end of the route
+        return current
     }
 
     override fun onCreate() {
@@ -102,6 +135,7 @@ class MockLocationService : Service() {
         handler.removeCallbacks(tick)
         point = null
         moving = false
+        route = null
         for (pr in providers) {
             try { lm.removeTestProvider(pr) } catch (_: Exception) {}
         }
@@ -114,11 +148,29 @@ class MockLocationService : Service() {
 
     /** Update the fake target. moving=true keeps advancing along [brng] at [spd]. */
     fun update(p: GeoPoint, spd: Float, brng: Float, mv: Boolean) {
+        route = null
         point = p
         speed = spd
         bearing = brng
         moving = mv
         push(p)
+    }
+
+    /** Follow [routePoints] (e.g. a road-snapped path) at [spd], starting from its first point. */
+    fun updateRoute(routePoints: List<GeoPoint>, spd: Float) {
+        val start = routePoints.firstOrNull() ?: return
+        route = routePoints
+        routeSegmentIndex = 1
+        point = start
+        speed = spd
+        bearing = if (routePoints.size > 1) start.bearingTo(routePoints[1]).toFloat() else bearing
+        moving = routePoints.size > 1
+        push(start)
+    }
+
+    /** Change the travel speed without disturbing the route or the progress along it. */
+    fun setSpeed(spd: Float) {
+        speed = spd
     }
 
     fun stopMoving() {
@@ -235,6 +287,8 @@ class MockLocationService : Service() {
 
     companion object {
         const val ACTION_STOP = "com.example.fakegps.STOP"
+        /** Push rate. Short enough that each step is a small, smooth increment on the map. */
+        const val TICK_INTERVAL_MS = 250L
         private const val CHANNEL_ID = "fakegps_mock"
         private const val NOTIF_ID = 1001
     }

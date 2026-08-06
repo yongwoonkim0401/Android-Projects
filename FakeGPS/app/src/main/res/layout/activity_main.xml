@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -20,7 +21,7 @@
         android:contentDescription="현재 가짜 위치"
         android:src="@drawable/ic_crosshair" />
 
-    <!-- ON/OFF switch + "return to current location" button, just below the crosshair -->
+    <!-- Row 1: Fake GPS ON/OFF button + route auto-move ON/OFF button + "return to current location" -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -34,10 +35,44 @@
         android:paddingTop="4dp"
         android:paddingBottom="4dp">
 
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/startStopSwitch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/startStopButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="60dp"
+            android:layout_height="34dp"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:textAllCaps="false"
+            android:textSize="12sp"
+            app:cornerRadius="8dp"
+            android:text="OFF"
+            android:contentDescription="Fake GPS 시작/정지" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/routeToggleButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="60dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="6dp"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingStart="0dp"
+            android:paddingEnd="0dp"
+            android:textAllCaps="false"
+            android:textSize="12sp"
+            app:cornerRadius="8dp"
+            android:text="OFF"
+            android:contentDescription="자동 이동(경로) 시작/정지" />
 
         <View
             android:layout_width="1dp"
@@ -55,6 +90,95 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@drawable/ic_my_location"
             android:contentDescription="현재 위치로 되돌아가기" />
+    </LinearLayout>
+
+    <!-- Row 2: route start/end point picker + speed -/+ -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:translationY="108dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/switch_chip_bg"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/setRoutePointsButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="34dp"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:textAllCaps="false"
+            android:textSize="12sp"
+            app:cornerRadius="8dp"
+            app:backgroundTint="#616161"
+            android:text="출발점/도착점 지정" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="#55FFFFFF" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/speedMinusButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:textAllCaps="false"
+            android:textSize="16sp"
+            app:cornerRadius="8dp"
+            app:backgroundTint="#616161"
+            android:text="−"
+            android:contentDescription="속도 감소" />
+
+        <TextView
+            android:id="@+id/speedValueText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:text="12 km/h" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/speedPlusButton"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:insetLeft="0dp"
+            android:insetRight="0dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:padding="0dp"
+            android:textAllCaps="false"
+            android:textSize="16sp"
+            app:cornerRadius="8dp"
+            app:backgroundTint="#616161"
+            android:text="+"
+            android:contentDescription="속도 증가" />
     </LinearLayout>
 
     <!-- Non-interactive status overlay (passes touches through to the map) -->

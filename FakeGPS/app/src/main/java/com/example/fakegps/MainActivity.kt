@@ -1,12 +1,15 @@
 package com.example.fakegps
 
 import android.Manifest
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -17,6 +20,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.MotionEvent
+import android.view.animation.LinearInterpolator
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -27,16 +31,23 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import org.json.JSONObject
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapListener
+import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
 import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
+import org.osmdroid.views.overlay.Polyline
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
@@ -47,7 +58,6 @@ class MainActivity : AppCompatActivity() {
 
     private var userHasInteracted = false
     private var fakeActive = false // master start/stop state
-    private var suppressSwitch = false // guard against re-entrant switch callbacks
 
     // Desired fake state (mirrored to the service, also used for the map/UI)
     private var currentPoint: GeoPoint? = null
@@ -58,6 +68,22 @@ class MainActivity : AppCompatActivity() {
     private var movedWhileTouching = false
     private var lastCenter: GeoPoint? = null
     private var lastMoveTimeMs = 0L
+
+    // ---- Route (auto-move start -> end at a set speed) ---------------------
+
+    private enum class PickMode { NONE, START, END }
+    private var pickMode = PickMode.NONE
+    private var startPoint: GeoPoint? = null
+    private var endPoint: GeoPoint? = null
+    private var startMarker: Marker? = null
+    private var endMarker: Marker? = null
+    private var routePolyline: List<GeoPoint>? = null
+    private var routeLineOverlay: Polyline? = null
+    private var routeActive = false
+    private var routeSpeedKmh = 12
+    private var routeFetchPending = false
+    private var activeRoutePath: List<GeoPoint>? = null
+    private var mapPanAnimator: ValueAnimator? = null
 
     private var mockPrompted = false
     private var startupListener: LocationListener? = null
@@ -74,6 +100,14 @@ class MainActivity : AppCompatActivity() {
             mockService = svc
             svc.onPush = { p, brng, mv -> runOnUiThread { onServicePush(p, brng, mv) } }
             svc.onError = { runOnUiThread { maybeShowMockDialog() } }
+
+            // Binding is async: a route started before it completed still needs handing over.
+            val pending = activeRoutePath
+            if (routeActive && pending != null) {
+                svc.updateRoute(pending, speedMps)
+                updateStatus()
+                return
+            }
 
             val svcPoint = svc.currentPoint()
             if (svcPoint != null) {
@@ -114,8 +148,44 @@ class MainActivity : AppCompatActivity() {
         if (userTouching || !fakeActive) return
         currentPoint = p
         bearing = brng
-        if (mv) map.controller.animateTo(p) // keep the auto-moving point under the crosshair
+        if (mv) smoothPanTo(p, MockLocationService.TICK_INTERVAL_MS)
+
+        // The service clears `moving` once it runs off the end of the route.
+        if (routeActive && !mv) {
+            arriveAtRouteEnd(endPoint ?: p)
+            return
+        }
         updateStatus()
+    }
+
+    /**
+     * Pans the map to [target] at a constant rate over [durationMs]. osmdroid's own
+     * `animateTo` eases in/out, which makes the map visibly stop and restart on every
+     * push; a linear interpolation over exactly one tick keeps the motion continuous.
+     */
+    private fun smoothPanTo(target: GeoPoint, durationMs: Long) {
+        mapPanAnimator?.cancel()
+        val center = map.mapCenter
+        val fromLat = center.latitude
+        val fromLon = center.longitude
+        val dLat = target.latitude - fromLat
+        val dLon = target.longitude - fromLon
+        if (dLat == 0.0 && dLon == 0.0) return
+
+        mapPanAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = durationMs
+            interpolator = LinearInterpolator()
+            addUpdateListener { anim ->
+                val f = (anim.animatedValue as Float).toDouble()
+                map.controller.setCenter(GeoPoint(fromLat + dLat * f, fromLon + dLon * f))
+            }
+            start()
+        }
+    }
+
+    private fun cancelMapPan() {
+        mapPanAnimator?.cancel()
+        mapPanAnimator = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -182,6 +252,10 @@ class MainActivity : AppCompatActivity() {
         map.controller.setZoom(18.0)
         map.controller.setCenter(GeoPoint(37.5665, 126.9780))
 
+        map.overlays.add(MapEventsOverlay(object : MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: GeoPoint): Boolean = handleMapTap(p)
+            override fun longPressHelper(p: GeoPoint): Boolean = false
+        }))
         map.overlays.add(TouchTracker())
 
         map.addMapListener(object : MapListener {
@@ -200,24 +274,277 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupControls() {
-        binding.startStopSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (suppressSwitch) return@setOnCheckedChangeListener
-            if (isChecked) {
-                if (!startFake()) setSwitchChecked(false) // revert if it couldn't start
-            } else {
-                stopFake()
-            }
+        binding.startStopButton.setOnClickListener {
+            if (fakeActive) stopFake() else startFake()
         }
+
+        binding.routeToggleButton.setOnClickListener {
+            if (routeActive) stopRoute() else startRoute()
+            updateToggleButtonsUI()
+        }
+
+        binding.setRoutePointsButton.setOnClickListener {
+            beginRoutePicking()
+        }
+
+        binding.speedMinusButton.setOnClickListener { changeSpeed(-1) }
+
+        binding.speedPlusButton.setOnClickListener { changeSpeed(+1) }
 
         binding.myLocationButton.setOnClickListener {
             goToCurrentRealLocation(force = true)
         }
+
+        updateToggleButtonsUI()
+        updateSpeedText()
     }
 
-    private fun setSwitchChecked(checked: Boolean) {
-        suppressSwitch = true
-        binding.startStopSwitch.isChecked = checked
-        suppressSwitch = false
+    private fun updateToggleButtonsUI() {
+        binding.startStopButton.text = if (fakeActive) "ON" else "OFF"
+        binding.startStopButton.backgroundTintList =
+            ColorStateList.valueOf(if (fakeActive) COLOR_ON else COLOR_OFF)
+
+        binding.routeToggleButton.text = if (routeActive) "ON" else "OFF"
+        binding.routeToggleButton.backgroundTintList =
+            ColorStateList.valueOf(if (routeActive) COLOR_ROUTE_ON else COLOR_OFF)
+    }
+
+    /** Adjusts the travel speed, applying it live if auto-move is already running. */
+    private fun changeSpeed(deltaKmh: Int) {
+        routeSpeedKmh = (routeSpeedKmh + deltaKmh).coerceIn(1, 200)
+        updateSpeedText()
+        if (routeActive) {
+            speedMps = routeSpeedKmh / 3.6f
+            mockService?.setSpeed(speedMps)
+            updateStatus()
+        }
+    }
+
+    private fun updateSpeedText() {
+        binding.speedValueText.text = "$routeSpeedKmh km/h"
+    }
+
+    // ---- Route picking (tap the map to set start/end points) ---------------
+
+    private fun handleMapTap(p: GeoPoint): Boolean {
+        return when (pickMode) {
+            PickMode.START -> {
+                setStartPoint(p)
+                pickMode = PickMode.END
+                Toast.makeText(this, "도착점을 지도에서 탭하세요", Toast.LENGTH_SHORT).show()
+                true
+            }
+            PickMode.END -> {
+                setEndPoint(p)
+                pickMode = PickMode.NONE
+                Toast.makeText(this, "출발점/도착점이 설정되었습니다", Toast.LENGTH_SHORT).show()
+                true
+            }
+            PickMode.NONE -> false
+        }
+    }
+
+    private fun beginRoutePicking() {
+        if (routeActive) {
+            stopRoute()
+            updateToggleButtonsUI()
+        }
+        clearRouteMarkers()
+        clearRoutePolyline()
+        startPoint = null
+        endPoint = null
+        routeFetchPending = false // any in-flight fetch is now stale and won't touch this
+        pickMode = PickMode.START
+        Toast.makeText(this, "출발점을 지도에서 탭하세요", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun setStartPoint(p: GeoPoint) {
+        startPoint = p
+        startMarker?.let { map.overlays.remove(it) }
+        startMarker = createRouteMarker(p, COLOR_ON)
+        map.overlays.add(startMarker)
+        map.invalidate()
+    }
+
+    private fun setEndPoint(p: GeoPoint) {
+        endPoint = p
+        endMarker?.let { map.overlays.remove(it) }
+        endMarker = createRouteMarker(p, COLOR_MARKER_END)
+        map.overlays.add(endMarker)
+        map.invalidate()
+
+        val start = startPoint ?: return
+        clearRoutePolyline()
+        routeFetchPending = true
+        Toast.makeText(this, "도로 경로를 계산하는 중...", Toast.LENGTH_SHORT).show()
+        fetchRoadRoute(start, p) { route, error ->
+            if (startPoint !== start || endPoint !== p) return@fetchRoadRoute // stale (points changed meanwhile)
+            routeFetchPending = false
+            if (route != null) {
+                routePolyline = route
+                showRoutePolyline(route)
+                Toast.makeText(this, "도로 경로 설정됨 (${route.size}개 지점)", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "도로 경로 실패: $error — 직선으로 이동합니다", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun createRouteMarker(p: GeoPoint, tint: Int): Marker {
+        val marker = Marker(map)
+        marker.setPosition(p)
+        marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        val icon = ContextCompat.getDrawable(this, R.drawable.ic_marker)?.mutate()
+        icon?.setTint(tint)
+        marker.icon = icon
+        return marker
+    }
+
+    private fun clearRouteMarkers() {
+        startMarker?.let { map.overlays.remove(it) }
+        endMarker?.let { map.overlays.remove(it) }
+        startMarker = null
+        endMarker = null
+        map.invalidate()
+    }
+
+    // ---- Road routing (OSRM demo server — no API key, low-volume use only) ------
+
+    private fun fetchRoadRoute(
+        start: GeoPoint,
+        end: GeoPoint,
+        onResult: (List<GeoPoint>?, String?) -> Unit
+    ) {
+        Thread {
+            var route: List<GeoPoint>? = null
+            var error: String? = null
+            for (host in ROUTING_HOSTS) {
+                // OSRM wants lon,lat and a '.' decimal separator regardless of device locale.
+                val url = String.format(
+                    java.util.Locale.US,
+                    "%s/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson",
+                    host, start.longitude, start.latitude, end.longitude, end.latitude
+                )
+                try {
+                    val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "GET"
+                        connectTimeout = 10000
+                        readTimeout = 10000
+                        setRequestProperty("User-Agent", "FakeGPS-ywkim/1.0")
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    try {
+                        val code = conn.responseCode
+                        if (code != HttpURLConnection.HTTP_OK) {
+                            error = "HTTP $code"
+                            continue
+                        }
+                        val body = conn.inputStream.bufferedReader().use { it.readText() }
+                        val parsed = parseOsrmRoute(body)
+                        if (parsed != null) {
+                            route = parsed
+                            error = null
+                            break
+                        }
+                        error = "경로 없음(${JSONObject(body).optString("code", "?")})"
+                    } finally {
+                        conn.disconnect()
+                    }
+                } catch (e: Exception) {
+                    error = e.javaClass.simpleName + (e.message?.let { ": $it" } ?: "")
+                }
+            }
+            runOnUiThread { onResult(route, error) }
+        }.start()
+    }
+
+    private fun parseOsrmRoute(json: String): List<GeoPoint>? {
+        return try {
+            val root = JSONObject(json)
+            if (root.optString("code") != "Ok") return null
+            val routes = root.optJSONArray("routes") ?: return null
+            if (routes.length() == 0) return null
+            val coords = routes.getJSONObject(0).getJSONObject("geometry").getJSONArray("coordinates")
+            val points = ArrayList<GeoPoint>(coords.length())
+            for (i in 0 until coords.length()) {
+                val c = coords.getJSONArray(i)
+                points.add(GeoPoint(c.getDouble(1), c.getDouble(0))) // GeoJSON is [lon, lat]
+            }
+            points.takeIf { it.size >= 2 }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun showRoutePolyline(points: List<GeoPoint>) {
+        routeLineOverlay?.let { map.overlays.remove(it) }
+        val line = Polyline(map)
+        line.setPoints(points)
+        line.setColor(COLOR_ROUTE_ON)
+        line.setWidth(6f)
+        routeLineOverlay = line
+        map.overlays.add(line)
+        map.invalidate()
+    }
+
+    private fun clearRoutePolyline() {
+        routeLineOverlay?.let { map.overlays.remove(it) }
+        routeLineOverlay = null
+        routePolyline = null
+    }
+
+    // ---- Route auto-move (start -> end at the set speed) --------------------
+
+    private fun startRoute(): Boolean {
+        val start = startPoint
+        val tappedEnd = endPoint
+        if (start == null || tappedEnd == null) {
+            Toast.makeText(this, "먼저 출발점/도착점을 지정하세요", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        if (routeFetchPending) {
+            Toast.makeText(this, "도로 경로를 계산 중입니다. 잠시 후 다시 시도하세요", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        if (!fakeActive && !startFake(showToast = false)) return false
+
+        // Follow the fetched road route if we have one; otherwise fall back to a straight line.
+        val path = routePolyline?.takeIf { it.size >= 2 } ?: listOf(start, tappedEnd)
+        endPoint = path.last() // keep arrival detection aligned with where the path actually ends
+        activeRoutePath = path
+
+        currentPoint = start
+        lastCenter = start
+        bearing = start.bearingTo(path[1]).toFloat()
+        speedMps = routeSpeedKmh / 3.6f
+        moving = true
+        routeActive = true
+
+        map.controller.animateTo(start)
+        mockService?.updateRoute(path, speedMps)
+        updateStatus()
+        Toast.makeText(this, "자동 이동 시작 — 도착점까지 이동합니다", Toast.LENGTH_SHORT).show()
+        return true
+    }
+
+    private fun stopRoute() {
+        if (!routeActive) return
+        routeActive = false
+        moving = false
+        speedMps = 0f
+        activeRoutePath = null
+        cancelMapPan()
+        mockService?.stopMoving()
+        currentPoint?.let { if (fakeActive) mockService?.update(it, 0f, bearing, false) }
+        updateStatus()
+    }
+
+    private fun arriveAtRouteEnd(target: GeoPoint) {
+        currentPoint = target
+        stopRoute()
+        map.controller.animateTo(target)
+        updateToggleButtonsUI()
+        Toast.makeText(this, "도착점에 도달했습니다", Toast.LENGTH_SHORT).show()
     }
 
     /** Tracks finger state without consuming touches, so the map still pans/zooms. */
@@ -229,6 +556,11 @@ class MainActivity : AppCompatActivity() {
                     userHasInteracted = true
                     movedWhileTouching = false
                     moving = false
+                    cancelMapPan() // hand the map back to the finger immediately
+                    if (routeActive) {
+                        stopRoute()
+                        updateToggleButtonsUI()
+                    }
                     mockService?.stopMoving()
                     val c = mapView.mapCenter
                     lastCenter = GeoPoint(c.latitude, c.longitude)
@@ -272,7 +604,7 @@ class MainActivity : AppCompatActivity() {
     // ---- Start / stop --------------------------------------------------------
 
     /** Returns true if fake GPS was started; false if it couldn't (e.g. no permission). */
-    private fun startFake(): Boolean {
+    private fun startFake(showToast: Boolean = true): Boolean {
         if (!hasLocationPermission()) {
             requestPermissionsIfNeeded()
             return false
@@ -291,8 +623,11 @@ class MainActivity : AppCompatActivity() {
         ensureServiceBound()
         mockService?.update(center, 0f, bearing, false)
 
+        updateToggleButtonsUI()
         updateStatus()
-        Toast.makeText(this, "Fake GPS 시작 — 지도를 드래그해 위치를 이동하세요", Toast.LENGTH_SHORT).show()
+        if (showToast) {
+            Toast.makeText(this, "Fake GPS 시작 — 지도를 드래그해 위치를 이동하세요", Toast.LENGTH_SHORT).show()
+        }
         return true
     }
 
@@ -300,6 +635,9 @@ class MainActivity : AppCompatActivity() {
         fakeActive = false
         moving = false
         speedMps = 0f
+        routeActive = false
+        activeRoutePath = null
+        cancelMapPan()
 
         // Clear the mock so the device's real GPS takes over again. Delivering
         // ACTION_STOP works whether or not binding has completed yet.
@@ -315,6 +653,7 @@ class MainActivity : AppCompatActivity() {
 
         // Return the map (and reported position) to the real current location
         goToCurrentRealLocation(force = true)
+        updateToggleButtonsUI()
         updateStatus()
         Toast.makeText(this, "Fake GPS 멈춤 — 실제 위치로 복귀합니다", Toast.LENGTH_SHORT).show()
     }
@@ -428,6 +767,10 @@ class MainActivity : AppCompatActivity() {
         }
         val state = when {
             userTouching -> "드래그 중 (위치 실시간 이동)"
+            routeActive -> {
+                val kmh = (speedMps * 3.6f).toInt()
+                "자동 이동 중(경로) · 방위 ${bearing.toInt()}° · $kmh km/h"
+            }
             moving -> {
                 val kmh = (speedMps * 3.6f).toInt()
                 "자동 이동 중 · 방위 ${bearing.toInt()}° · $kmh km/h"
@@ -516,6 +859,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        cancelMapPan()
         startupListener?.let { try { locationManager.removeUpdates(it) } catch (_: Exception) {} }
+    }
+
+    companion object {
+        // OSRM-compatible public routing servers, tried in order (no API key required).
+        private val ROUTING_HOSTS = listOf(
+            "https://routing.openstreetmap.de/routed-car",
+            "https://router.project-osrm.org"
+        )
+
+        private val COLOR_ON = Color.parseColor("#43A047")
+        private val COLOR_OFF = Color.parseColor("#757575")
+        private val COLOR_ROUTE_ON = Color.parseColor("#1E88E5")
+        private val COLOR_MARKER_END = Color.parseColor("#E53935")
     }
 }
