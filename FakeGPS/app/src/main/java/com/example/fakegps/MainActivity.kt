@@ -80,7 +80,7 @@ class MainActivity : AppCompatActivity() {
     private var routePolyline: List<GeoPoint>? = null
     private var routeLineOverlay: Polyline? = null
     private var routeActive = false
-    private var routeSpeedKmh = 12
+    private var routeSpeedKmh = 20
     private var routeFetchPending = false
     private var activeRoutePath: List<GeoPoint>? = null
     private var mapPanAnimator: ValueAnimator? = null
@@ -509,7 +509,9 @@ class MainActivity : AppCompatActivity() {
         if (!fakeActive && !startFake(showToast = false)) return false
 
         // Follow the fetched road route if we have one; otherwise fall back to a straight line.
-        val path = routePolyline?.takeIf { it.size >= 2 } ?: listOf(start, tappedEnd)
+        // Copy it so this run is a distinct instance: the service resumes a route it recognises
+        // and starts fresh on one it doesn't, which is exactly what each case needs here.
+        val path = (routePolyline?.takeIf { it.size >= 2 } ?: listOf(start, tappedEnd)).toList()
         endPoint = path.last() // keep arrival detection aligned with where the path actually ends
         activeRoutePath = path
 

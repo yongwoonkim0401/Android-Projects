@@ -156,9 +156,18 @@ class MockLocationService : Service() {
         push(p)
     }
 
-    /** Follow [routePoints] (e.g. a road-snapped path) at [spd], starting from its first point. */
+    /**
+     * Follow [routePoints] (e.g. a road-snapped path) at [spd], starting from its first point.
+     *
+     * If this same route is already under way, only the speed is applied: progress along it is
+     * preserved, so a re-delivery (speed change, activity rebind) never rewinds to the start.
+     */
     fun updateRoute(routePoints: List<GeoPoint>, spd: Float) {
         val start = routePoints.firstOrNull() ?: return
+        if (route === routePoints && point != null && routeSegmentIndex in 1 until routePoints.size) {
+            speed = spd
+            return
+        }
         route = routePoints
         routeSegmentIndex = 1
         point = start

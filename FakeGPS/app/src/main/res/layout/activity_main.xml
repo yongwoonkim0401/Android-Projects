@@ -159,7 +159,7 @@
             android:layout_marginEnd="8dp"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
-            android:text="12 km/h" />
+            android:text="20 km/h" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/speedPlusButton"
