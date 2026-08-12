@@ -5,6 +5,7 @@
 | 프로젝트 | 설명 |
 |---|---|
 | [AndroidCCTV](AndroidCCTV) | 구형 폰을 CCTV로 — 자체 구현 HTTP 서버로 H.264/MJPEG 실시간 스트리밍 + 웹 제어 패널 |
+| [BigSpaceKeyboard](BigSpaceKeyboard) | 스페이스바를 더 넓고 더 높게 만든 키보드(IME). 키 배치/터치/렌더링 직접 구현, 모음 8개로 줄이고 연타로 채운 한글 두벌식, 길게 눌러 쓰는 기호 39종, 553자 기호 팔레트, 클립보드 붙여넣기 |
 | [FakeGPS](FakeGPS) | osmdroid 기반 모의 위치(Mock GPS) 주입 앱. 지도 탭/드래그로 위치 이동, 출발점→도착점을 찍으면 OSRM 도로 경로를 따라 지정 속도(1~200km/h)로 자동 이동 (Google Maps API 키 불필요) |
 | [GpsToggleWidget](GpsToggleWidget) | 홈 화면 위젯으로 GPS 위치 로그 수집 on/off + GPX 경로/그래프 뷰어 |
 | [SangilWidget](SangilWidget) | 홈 화면 위젯 탭으로 "산길샘" 앱의 시작/종료 버튼을 AccessibilityService로 자동 클릭 |

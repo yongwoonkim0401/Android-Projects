@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BigSpace 키보드</string>
+    <string name="ime_name">BigSpace 키보드</string>
+    <string name="subtype_label_en">English (QWERTY)</string>
+    <string name="subtype_label_ko">한국어 (두벌식)</string>
+
+    <string name="section_setup">사용 준비</string>
+    <string name="status_checking">상태 확인 중…</string>
+    <string name="status_not_enabled">1단계: 시스템 설정에서 이 키보드를 켜주세요.</string>
+    <string name="status_not_selected">2단계: 입력기를 이 키보드로 바꿔주세요.</string>
+    <string name="status_ready">사용 준비 완료. 지금 기본 키보드로 설정되어 있습니다.</string>
+    <string name="action_enable">시스템 설정에서 켜기</string>
+    <string name="action_pick">입력기 선택</string>
+
+    <string name="section_size">키 크기 · 반응 세기</string>
+    <string name="label_space_width">스페이스바 폭: %1$.1f칸 · 아랫줄의 %2$d%%</string>
+    <string name="label_space_height">스페이스바 높이: 기본 키의 %.1f배</string>
+    <string name="label_key_height">키 높이: 정사각형의 %1$.2f배 · 약 %2$d dp</string>
+    <string name="label_total_height">키보드 전체 높이: 약 %d dp</string>
+    <string name="label_hint_size">모서리 기호 힌트 크기: 키 높이의 %d%%</string>
+    <string name="label_hint_hidden">모서리 기호 힌트: 숨김 (길게 누르기는 그대로 동작)</string>
+
+    <string name="label_sound">키 소리 크기: %d%%</string>
+    <string name="label_sound_off">키 소리: 끔</string>
+    <string name="label_vibrate">진동 세기: %d%%</string>
+    <string name="label_vibrate_off">진동: 끔</string>
+    <string name="hint_sound">시스템 설정에서 \'터치 사운드\'가 꺼져 있으면 여기서 올려도 소리가 나지 않습니다.</string>
+
+    <string name="section_feel">입력 느낌</string>
+    <string name="label_preview">누른 글자 미리보기</string>
+    <string name="label_swipe">스페이스바 좌우 드래그로 커서 이동</string>
+    <string name="label_double_tap">같은 자음 연타로 쌍자음 (ㅅㅅ→ㅆ)</string>
+    <string name="hint_double_tap">끄면 쌍자음은 Shift로만 입력됩니다. 켜두면 \'학교\'·\'웃습\'처럼 받침과 다음 초성이 같은 글자를 빠르게 칠 때 붙을 수 있습니다. 모음 연타(ㅏㅏ→ㅑ)는 이 설정과 무관하게 항상 동작합니다.</string>
+
+    <string name="section_try">여기에 입력해 보세요</string>
+    <string name="hint_try">아래 미리보기 키보드로 바로 쳐볼 수 있습니다 (한/영·기호 모두 동작)</string>
+    <string name="hint_long_press">키를 잠깐 누르고 있으면 오른쪽 위 모서리에 작게 적힌 기호가 입력됩니다. 숫자 키는 Shift로도 같은 기호가 나옵니다.</string>
+    <string name="action_reset">기본값으로 되돌리기</string>
+</resources>

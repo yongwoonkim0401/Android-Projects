@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="kb_background">#FF14161A</color>
+    <color name="key_bg">#FF2B2F36</color>
+    <color name="key_bg_pressed">#FF3F454F</color>
+    <color name="key_fn_bg">#FF1E2127</color>
+    <color name="key_fn_bg_pressed">#FF2B2F36</color>
+    <color name="key_space_bg">#FF2B2F36</color>
+    <color name="key_space_bg_pressed">#FF3F454F</color>
+    <color name="key_accent_bg">#FF3A6FF7</color>
+    <color name="key_accent_bg_pressed">#FF5183FF</color>
+    <color name="key_text">#FFF2F4F7</color>
+    <color name="key_text_muted">#FF7C838D</color>
+    <color name="key_text_on_accent">#FFFFFFFF</color>
+    <color name="preview_bg">#FF3F454F</color>
+    <color name="clip_bg">#FF23272E</color>
+    <color name="clip_bg_pressed">#FF3F454F</color>
+</resources>

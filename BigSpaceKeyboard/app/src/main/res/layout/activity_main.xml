@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textAppearance="?attr/textAppearanceHeadlineSmall" />
+
+            <!--  setup -->
+
+            <TextView
+                style="@style/SectionHeader"
+                android:text="@string/section_setup" />
+
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/status_checking"
+                android:textAppearance="?attr/textAppearanceBodyMedium" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/enableButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="8dp"
+                    android:layout_weight="1"
+                    android:text="@string/action_enable" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/pickButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/action_pick" />
+            </LinearLayout>
+
+            <!--  size -->
+
+            <TextView
+                style="@style/SectionHeader"
+                android:text="@string/section_size" />
+
+            <TextView
+                android:id="@+id/spaceWidthLabel"
+                style="@style/SliderLabel" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/spaceWidthSlider"
+                style="@style/FullWidthSlider"
+                android:stepSize="5"
+                android:valueFrom="40"
+                android:valueTo="80" />
+
+            <TextView
+                android:id="@+id/spaceHeightLabel"
+                style="@style/SliderLabel" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/spaceHeightSlider"
+                style="@style/FullWidthSlider"
+                android:stepSize="1"
+                android:valueFrom="10"
+                android:valueTo="22" />
+
+            <TextView
+                android:id="@+id/keyHeightLabel"
+                style="@style/SliderLabel" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/keyHeightSlider"
+                style="@style/FullWidthSlider"
+                android:stepSize="5"
+                android:valueFrom="80"
+                android:valueTo="140" />
+
+            <TextView
+                android:id="@+id/hintSizeLabel"
+                style="@style/SliderLabel" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/hintSizeSlider"
+                style="@style/FullWidthSlider"
+                android:stepSize="1"
+                android:valueFrom="0"
+                android:valueTo="9" />
+
+            <TextView
+                android:id="@+id/totalHeightLabel"
+                style="@style/SliderLabel"
+                android:textAppearance="?attr/textAppearanceLabelLarge" />
+
+            <TextView
+                android:id="@+id/vibrateLabel"
+                style="@style/SliderLabel" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/vibrateSlider"
+                style="@style/FullWidthSlider"
+                android:stepSize="10"
+                android:valueFrom="0"
+                android:valueTo="100" />
+
+            <TextView
+                android:id="@+id/soundLabel"
+                style="@style/SliderLabel" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/soundSlider"
+                style="@style/FullWidthSlider"
+                android:stepSize="10"
+                android:valueFrom="0"
+                android:valueTo="100" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/hint_sound"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <!--  feel -->
+
+            <TextView
+                style="@style/SectionHeader"
+                android:text="@string/section_feel" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/previewSwitch"
+                style="@style/SettingSwitch"
+                android:text="@string/label_preview" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/swipeSwitch"
+                style="@style/SettingSwitch"
+                android:text="@string/label_swipe" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/doubleTapSwitch"
+                style="@style/SettingSwitch"
+                android:text="@string/label_double_tap" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="@string/hint_double_tap"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <!--  try -->
+
+            <TextView
+                style="@style/SectionHeader"
+                android:text="@string/section_try" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="@string/hint_long_press"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:boxBackgroundMode="outline">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/testInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="top|start"
+                    android:hint="@string/hint_try"
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:minLines="3" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/resetButton"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/action_reset" />
+        </LinearLayout>
+    </ScrollView>
+
+    <com.example.bigspacekeyboard.KeyboardView
+        android:id="@+id/keyboardPreview"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp" />
+
+</LinearLayout>
