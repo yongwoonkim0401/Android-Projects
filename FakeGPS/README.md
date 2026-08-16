@@ -57,6 +57,19 @@ Gradle wrapper(`gradlew`)는 Android Studio가 최초 동기화 시 생성합니
 ```
 APK 위치: `app/build/outputs/apk/debug/app-debug.apk`
 
+### 릴리스 APK (서명)
+1. `keystore.properties.example` 을 같은 폴더에 `keystore.properties` 로 복사
+2. 본인 키스토어 경로/별칭/비밀번호를 채웁니다 (`storeFile` 은 **절대 경로** 권장)
+3. `./gradlew assembleRelease` → `app/build/outputs/apk/release/app-release.apk`
+
+`keystore.properties` 는 `.gitignore` 에 등록되어 있어 커밋되지 않습니다.
+파일이 없으면 릴리스 빌드는 실패하지 않고 **서명되지 않은 APK** 로 나옵니다.
+
+> Android Studio 의 *Generate Signed Bundle / APK* 마법사를 쓸 경우, 키스토어 경로를
+> 파일 이름만 적으면 Gradle 데몬 폴더 기준 상대 경로로 해석되어
+> `Keystore file ... not found for signing config 'externalOverride'` 오류가 납니다.
+> 반드시 **절대 경로**로 지정하세요.
+
 ## 주요 파일
 - `app/src/main/java/com/example/fakegps/MainActivity.kt` — 지도, 터치 처리, 현재 위치, UI
 - `app/src/main/java/com/example/fakegps/MockLocationService.kt` — 포그라운드 서비스, 모의 위치 주입

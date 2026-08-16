@@ -41,7 +41,8 @@ class MockLocationService : Service() {
 
     private val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
     private var providersReady = false
-    private var fusedMockReady = false
+    private var fusedMockReady = false      // confirmed: safe to push mock fixes to fused
+    private var fusedMockRequested = false  // asked for mock mode: must be released on stop
 
     // Fake state (single source of truth while active)
     private var point: GeoPoint? = null
@@ -140,7 +141,18 @@ class MockLocationService : Service() {
             try { lm.removeTestProvider(pr) } catch (_: Exception) {}
         }
         providersReady = false
-        try { if (fusedMockReady) fused?.setMockMode(false) } catch (_: Throwable) {}
+        releaseFusedMockMode()
+    }
+
+    /**
+     * Takes the fused provider out of mock mode. Guarded by "did we ever request it", not by the
+     * async success flag: leaving Play services in mock mode affects the whole device, and
+     * activity/fitness data stays suppressed until it is released.
+     */
+    private fun releaseFusedMockMode() {
+        if (!fusedMockRequested) return
+        try { fused?.setMockMode(false) } catch (_: Throwable) {}
+        fusedMockRequested = false
         fusedMockReady = false
     }
 
@@ -209,7 +221,10 @@ class MockLocationService : Service() {
             return false
         }
         // Also mock the fused provider so Google Play services based apps follow.
+        // Record the request synchronously: the success callback may not have arrived by the
+        // time we stop, and mock mode must be released regardless or it stays on device-wide.
         try {
+            fusedMockRequested = true
             fused?.setMockMode(true)
                 ?.addOnSuccessListener { fusedMockReady = true }
                 ?.addOnFailureListener { fusedMockReady = false }
@@ -288,7 +303,7 @@ class MockLocationService : Service() {
         for (pr in providers) {
             try { lm.removeTestProvider(pr) } catch (_: Exception) {}
         }
-        try { if (fusedMockReady) fused?.setMockMode(false) } catch (_: Throwable) {}
+        releaseFusedMockMode()
         onPush = null
         onError = null
         super.onDestroy()
