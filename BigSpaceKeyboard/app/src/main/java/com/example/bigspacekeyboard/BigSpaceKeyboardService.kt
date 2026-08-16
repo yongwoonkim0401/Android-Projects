@@ -21,17 +21,44 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
 
     private var clipboard: ClipboardManager? = null
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { refreshClipboard() }
+    private var listeningToClipboard = false
+    private var savedSymbolPage = -1
 
     override fun onCreate() {
         super.onCreate()
-        clipboard = (getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.also {
-            it.addPrimaryClipChangedListener(clipListener)
-        }
+        clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
     }
 
     override fun onDestroy() {
-        clipboard?.removePrimaryClipChangedListener(clipListener)
+        stopListeningToClipboard()
         super.onDestroy()
+    }
+
+    /**
+     * The listener is only attached while the keyboard is on screen.
+     *
+     * This service is alive for as long as it is the selected input method — hours, usually — and
+     * the callback fires whenever *any* app on the phone copies anything. Listening the whole time
+     * would rebuild the key layout on every copy made anywhere, for a keyboard nobody is looking at.
+     */
+    override fun onWindowShown() {
+        super.onWindowShown()
+        if (!listeningToClipboard) {
+            clipboard?.addPrimaryClipChangedListener(clipListener)
+            listeningToClipboard = true
+        }
+        refreshClipboard()
+    }
+
+    override fun onWindowHidden() {
+        stopListeningToClipboard()
+        super.onWindowHidden()
+    }
+
+    private fun stopListeningToClipboard() {
+        if (!listeningToClipboard) return
+        clipboard?.removePrimaryClipChangedListener(clipListener)
+        listeningToClipboard = false
     }
 
     override fun onCreateInputView(): View {
@@ -40,8 +67,19 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
             config = currentConfig()
             textLayer = KeyPrefs.loadTextLayer(this@BigSpaceKeyboardService)
             layer = textLayer
+            symbolPage = KeyPrefs.loadSymbolPage(this@BigSpaceKeyboardService)
         }
+        savedSymbolPage = keyboardView.symbolPage
         return keyboardView
+    }
+
+    override fun onFinishInputView(finishingInput: Boolean) {
+        // Only when it actually moved: this runs every time the keyboard is dismissed.
+        if (::keyboardView.isInitialized && keyboardView.symbolPage != savedSymbolPage) {
+            savedSymbolPage = keyboardView.symbolPage
+            KeyPrefs.saveSymbolPage(this, savedSymbolPage)
+        }
+        super.onFinishInputView(finishingInput)
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {

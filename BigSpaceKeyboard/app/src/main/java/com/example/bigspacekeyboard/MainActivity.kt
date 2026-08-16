@@ -77,6 +77,8 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
         hintSizeSlider.clearOnChangeListeners()
         vibrateSlider.clearOnChangeListeners()
         soundSlider.clearOnChangeListeners()
+        repeatSpeedSlider.clearOnChangeListeners()
+        longPressSlider.clearOnChangeListeners()
 
         spaceWidthSlider.value = (config.spaceWidthUnits * 10f).roundToInt()
             .coerceIn(40, 80).let { (it / 5) * 5 }.toFloat()
@@ -89,6 +91,10 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
 
         vibrateSlider.value = percentStop(config.vibrateStrength)
         soundSlider.value = percentStop(config.soundVolume)
+        repeatSpeedSlider.value = (config.repeatSpeed * 100f).roundToInt()
+            .coerceIn(50, 200).let { (it / 25) * 25 }.toFloat()
+        longPressSlider.value = config.longPressMs
+            .coerceIn(150, 600).let { (it / 50) * 50 }.toFloat()
 
         previewSwitch.isChecked = config.previewEnabled
         swipeSwitch.isChecked = config.spaceCursorSwipe
@@ -111,6 +117,12 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
         }
         soundSlider.addOnChangeListener { _, value, _ ->
             update(config.copy(soundVolume = value / 100f))
+        }
+        repeatSpeedSlider.addOnChangeListener { _, value, _ ->
+            update(config.copy(repeatSpeed = value / 100f))
+        }
+        longPressSlider.addOnChangeListener { _, value, _ ->
+            update(config.copy(longPressMs = value.roundToInt()))
         }
         previewSwitch.setOnCheckedChangeListener { _, checked ->
             update(config.copy(previewEnabled = checked))
@@ -151,6 +163,11 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
         binding.soundLabel.text = percentLabel(
             config.soundVolume, R.string.label_sound, R.string.label_sound_off
         )
+        binding.repeatSpeedLabel.text = getString(
+            R.string.label_repeat_speed, (config.repeatSpeed * 100f).roundToInt()
+        )
+        binding.longPressLabel.text =
+            getString(R.string.label_long_press_ms, config.longPressMs)
         binding.totalHeightLabel.text = getString(
             R.string.label_total_height, (keyHeightDp() * config.totalWeight).roundToInt()
         )

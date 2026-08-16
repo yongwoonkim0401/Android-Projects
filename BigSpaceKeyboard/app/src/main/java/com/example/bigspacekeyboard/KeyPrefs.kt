@@ -16,6 +16,9 @@ object KeyPrefs {
     private const val SWIPE = "space_cursor_swipe"
     private const val HANGUL = "text_layer_hangul"
     private const val DOUBLE_TAP = "double_tap_jamo"
+    private const val REPEAT_SPEED = "repeat_speed"
+    private const val LONG_PRESS = "long_press_ms"
+    private const val SYMBOL_PAGE = "symbol_page"
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
@@ -33,6 +36,8 @@ object KeyPrefs {
             vibrateStrength = p.getFloat(VIBRATE, defaults.vibrateStrength),
             spaceCursorSwipe = p.getBoolean(SWIPE, defaults.spaceCursorSwipe),
             doubleTapJamo = p.getBoolean(DOUBLE_TAP, defaults.doubleTapJamo),
+            repeatSpeed = p.getFloat(REPEAT_SPEED, defaults.repeatSpeed),
+            longPressMs = p.getInt(LONG_PRESS, defaults.longPressMs),
         )
     }
 
@@ -47,6 +52,8 @@ object KeyPrefs {
             .putFloat(VIBRATE, config.vibrateStrength)
             .putBoolean(SWIPE, config.spaceCursorSwipe)
             .putBoolean(DOUBLE_TAP, config.doubleTapJamo)
+            .putFloat(REPEAT_SPEED, config.repeatSpeed)
+            .putInt(LONG_PRESS, config.longPressMs)
             .apply()
     }
 
@@ -56,5 +63,12 @@ object KeyPrefs {
 
     fun saveTextLayer(context: Context, layer: Layer) {
         prefs(context).edit().putBoolean(HANGUL, layer == Layer.HANGUL).apply()
+    }
+
+    /** The palette runs to dozens of pages, so it reopens where it was left. */
+    fun loadSymbolPage(context: Context) = prefs(context).getInt(SYMBOL_PAGE, 0)
+
+    fun saveSymbolPage(context: Context, page: Int) {
+        prefs(context).edit().putInt(SYMBOL_PAGE, page).apply()
     }
 }

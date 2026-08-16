@@ -20,7 +20,8 @@ object SymbolCatalog {
         val category: String,
         val indexInCategory: Int,
         val pagesInCategory: Int,
-        val symbols: List<Char>,
+        /** 코드포인트 하나가 문자열 하나. 이모지는 BMP 밖이라 Char로는 담기지 않는다. */
+        val symbols: List<String>,
     ) {
         val label: String
             get() = if (pagesInCategory > 1) {
@@ -45,14 +46,33 @@ object SymbolCatalog {
         "라틴" to "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÑÒÓÔÕÖØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïñòóôõöøùúûüýþÿŒœŠšŸŽž",
     )
 
+    /**
+     * 윈도우 이모지 선택기(Win + .)에 있는 것들과 같은 범위. 단일 코드포인트만 담는다 —
+     * 국기나 ZWJ로 이어붙인 조합형(👨‍👩‍👧)은 기기마다 지원이 갈려서 뺐다.
+     * 기기 폰트에 없는 이모지는 [pages]에서 걸러지므로 신형 이모지를 넣어 둬도 안전하다.
+     */
+    private val EMOJI: List<Pair<String, String>> = listOf(
+        "표정" to "😀😃😄😁😆😅🤣😂🙂🙃😉😊😇🥰😍🤩😘😗😚😙😋😛😜🤪😝🤑🤗🤭🤫🤔🤐🤨😐😑😶😏😒🙄😬😮😯😲😳🥺😦😧😨😰😥😢😭😱😖😣😞😓😩😫🥱😤😡😠🤬🤯😳🥵🥶😴🤤😪😵🤐🤢🤮🤧😷🤒🤕🤠🥳🥸🤡👻💀👽🤖🎃😺😸😹😻😼😽🙀😿😾",
+        "손짓·사람" to "👍👎👌🤌🤏✌🤞🤟🤘🤙👈👉👆👇☝✋🤚🖐🖖👋🤝🙏💪🦾🦿🦵🦶👂🦻👃🧠🫀🫁🦷🦴👀👁👅👄💋👶🧒👦👧🧑👨👩🧓👴👵🙍🙎🙅🙆💁🙋🧏🙇🤦🤷👮🕵💂👷🤴👸👳👲🧕🤵👰🤰🤱👼🎅🤶🦸🦹🧙🧚🧛🧜🧝🧞🧟",
+        "동물·자연" to "🐶🐱🐭🐹🐰🦊🐻🐼🐨🐯🦁🐮🐷🐽🐸🐵🙈🙉🙊🐒🐔🐧🐦🐤🐣🐥🦆🦅🦉🦇🐺🐗🐴🦄🐝🪱🐛🦋🐌🐞🐜🪰🪲🦗🕷🕸🦂🐢🐍🦎🦖🦕🐙🦑🦐🦞🦀🐡🐠🐟🐬🐳🐋🦈🐊🐅🐆🦓🦍🦧🐘🦛🦏🐪🐫🦒🦘🦬🐃🐂🐄🐎🐖🐏🐑🦙🐐🦌🐕🐩🦮🐈🪶🐓🦃🦤🦚🦜🦢🦩🕊🐇🦝🦨🦡🦫🦦🦥🐁🐀🐿🦔🌵🎄🌲🌳🌴🪵🌱🌿☘🍀🎍🎋🍃🍂🍁🍄🐚🪨🌾💐🌷🌹🥀🌺🌸🌼🌻",
+        "음식" to "🍏🍎🍐🍊🍋🍌🍉🍇🍓🫐🍈🍒🍑🥭🍍🥥🥝🍅🍆🥑🥦🥬🥒🌶🫑🌽🥕🫒🧄🧅🥔🍠🥐🥯🍞🥖🥨🧀🥚🍳🧈🥞🧇🥓🥩🍗🍖🦴🌭🍔🍟🍕🫓🥪🥙🧆🌮🌯🫔🥗🥘🫕🥫🍝🍜🍲🍛🍣🍱🥟🦪🍤🍙🍚🍘🍥🥠🥮🍢🍡🍧🍨🍦🥧🧁🍰🎂🍮🍭🍬🍫🍿🍩🍪🌰🥜🍯🥛🍼🫖☕🍵🧃🥤🧋🍶🍺🍻🥂🍷🥃🍸🍹🧉🍾🧊🥄🍴🍽🥣🥡🥢🧂",
+        "운동·놀이" to "⚽🏀🏈⚾🥎🎾🏐🏉🥏🎱🪀🏓🏸🏒🏑🥍🏏🪃🥅⛳🪁🏹🎣🤿🥊🥋🎽🛹🛼🛷⛸🥌🎿⛷🏂🪂🏋🤼🤸⛹🤺🤾🏌🏇🧘🏄🏊🤽🚣🧗🚵🚴🏆🥇🥈🥉🏅🎖🏵🎗🎫🎟🎪🤹🎭🩰🎨🎬🎤🎧🎼🎹🥁🪘🎷🎺🪗🎸🪕🎻🎲♟🎯🎳🎮🎰🧩",
+        "기기·도구" to "⌚📱💻⌨🖥🖨🖱💽💾💿📀📼📷📸📹🎥📽🎞📞☎📟📠📺📻🎙🎚🎛🧭⏱⏲⏰🕰⌛⏳📡🔋🔌💡🔦🕯🪔🧯🛢⚖🪜🧰🪛🔧🔨⚒🛠⛏🪚🔩⚙🪤🧱⛓🧲🔫💣🧨🪓🔪🗡⚔🛡⚗🔭🔬🌡🩹🩺💊💉🩸🧬🦠🧫🧪🔑🗝🔏🔐🔒🔓",
+        "생활·집" to "💸💵💴💶💷🪙💰💳💎🚬⚰🪦⚱🏺🔮📿🧿💈🕳🧹🪠🧺🧻🚽🚰🚿🛁🛀🧼🪥🪒🧽🪣🧴🛎🚪🪑🛋🛏🛌🧸🪆🖼🪞🪟🛍🛒🎁🎈🎏🎀🪄🪅🎊🎉🎎🏮🎐🧧",
+        "문구·사무" to "✉📩📨📧💌📥📤📦🏷🪧📪📫📬📭📮📯📜📃📄📑🧾📊📈📉🗒🗓📆📅🗑📇🗃🗳🗄📋📁📂🗂🗞📰📓📔📒📕📗📘📙📚📖🔖🧷🔗📎🖇📐📏🧮📌📍✂🖊🖋✒🖌🖍📝✏🔍🔎",
+        "탈것·장소" to "🚗🚕🚙🚌🚎🏎🚓🚑🚒🚐🛻🚚🚛🚜🦯🦽🦼🛴🚲🛵🏍🛺🚨🚔🚍🚘🚖🛞🚡🚠🚟🚃🚋🚞🚝🚄🚅🚈🚂🚆🚇🚊🚉✈🛫🛬🛩💺🛰🚀🛸🚁🛶⛵🚤🛥🛳⛴🚢⚓🪝⛽🚧🚦🚥🚏🗺🗿🗽🗼🏰🏯🏟🎡🎢🎠⛲⛱🏖🏝🏜🌋⛰🏔🗻🏕⛺🛖🏠🏡🏘🏚🏗🏭🏢🏬🏣🏤🏥🏦🏨🏪🏫🏩💒🏛⛪🕌🕍🛕🕋⛩🛤🛣🗾🎑🏞🌅🌄🌠🎇🎆🌇🌆🏙🌃🌌🌉🌁",
+        "하트·표시" to "❤🧡💛💚💙💜🖤🤍🤎💔❣💕💞💓💗💖💘💝💟☮✝☪🕉☸✡🔯🕎☯☦🛐⛎♈♉♊♋♌♍♎♏♐♑♒♓🆔⚛🉑☢☣📴📳🈶🈚🈸🈺🈷✴🆚💮🉐㊙㊗🈴🈵🈹🈲🅰🅱🆎🆑🅾🆘❌⭕🛑⛔📛🚫💯💢♨🚷🚯🚳🚱🔞📵🚭❗❕❓❔‼⁉🔅🔆〽⚠🚸🔱⚜🔰♻✅🈯💹❇✳❎🌐💠Ⓜ🌀💤🏧🚾♿🅿🈳🈂🛂🛃🛄🛅🚹🚺🚼🚻🚮🎦📶🈁🔣🔤🔡🔠🆖🆗🆙🆒🆕🆓🔟🔢⏏▶⏸⏯⏹⏺⏭⏮⏩⏪⏫⏬🔀🔁🔂🔄🔃🎵🎶💭🗯💬🗨🃏🀄🎴🔇🔈🔉🔊🔔🔕📣📢",
+        "날씨·시간" to "☀🌤⛅🌥☁🌦🌧⛈🌩🌨❄☃⛄🌬💨🌪🌫🌈☂☔💧💦🌊🔥💥⚡🌍🌎🌏🌕🌖🌗🌘🌑🌒🌓🌔🌙🌚🌝🌞🪐⭐🌟💫✨☄🕐🕑🕒🕓🕔🕕🕖🕗🕘🕙🕚🕛",
+    )
+
     @Volatile
     private var cache: List<Page>? = null
 
     fun pages(paint: Paint): List<Page> {
         cache?.let { return it }
         val built = mutableListOf<Page>()
-        for ((category, source) in CATEGORIES) {
-            val available = source.toCharArray().distinct().filter { paint.hasGlyph(it.toString()) }
+        for ((category, source) in CATEGORIES + EMOJI) {
+            val available = codePoints(source).distinct().filter { paint.hasGlyph(it) }
             if (available.isEmpty()) continue
             val chunks = available.chunked(PER_PAGE)
             chunks.forEachIndexed { index, chunk ->
@@ -61,5 +81,17 @@ object SymbolCatalog {
         }
         cache = built
         return built
+    }
+
+    /** 서로게이트 페어를 쪼개지 않도록 코드포인트 단위로 자른다. */
+    private fun codePoints(text: String): List<String> {
+        val out = mutableListOf<String>()
+        var index = 0
+        while (index < text.length) {
+            val codePoint = text.codePointAt(index)
+            out.add(String(Character.toChars(codePoint)))
+            index += Character.charCount(codePoint)
+        }
+        return out
     }
 }

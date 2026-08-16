@@ -105,6 +105,10 @@ data class KeyboardConfig(
     val vibrateStrength: Float = 0.5f,
     val spaceCursorSwipe: Boolean = true,
     val doubleTapJamo: Boolean = true,
+    /** Multiplies how fast a held backspace (or page key) repeats. 1 = the default cadence. */
+    val repeatSpeed: Float = 1f,
+    /** How long a key must be held before it types its corner symbol. */
+    val longPressMs: Int = 300,
 ) {
     /** How much of the bottom row the space bar takes, as a percentage. */
     val spaceWidthPercent: Int
@@ -341,15 +345,22 @@ object KeyboardLayouts {
         val gridRows = (0 until SymbolCatalog.ROWS).map { row ->
             KeyRow((0 until SymbolCatalog.COLUMNS).map { column ->
                 val symbol = symbols.getOrNull(row * SymbolCatalog.COLUMNS + column)
-                if (symbol == null) Key(KeyCode.NONE) else Key(symbol.code, symbol.toString())
+                if (symbol == null) Key(KeyCode.NONE) else Key(symbol.codePointAt(0), symbol)
             })
         }
         return gridRows + bottomRow(
             config,
             listOf(
                 textLayerKey(textLayer, 1.25f),
-                Key(KeyCode.PAGE_PREV, "◀", width = 1.125f, style = KeyStyle.FUNCTION),
-                Key(KeyCode.PAGE_NEXT, "▶", width = 1.125f, style = KeyStyle.FUNCTION),
+                // Repeatable: with the emoji categories there are ~30 pages to walk through.
+                Key(
+                    KeyCode.PAGE_PREV, "◀",
+                    width = 1.125f, style = KeyStyle.FUNCTION, repeatable = true,
+                ),
+                Key(
+                    KeyCode.PAGE_NEXT, "▶",
+                    width = 1.125f, style = KeyStyle.FUNCTION, repeatable = true,
+                ),
             ),
             listOf(
                 backspaceKey(width = 1f),

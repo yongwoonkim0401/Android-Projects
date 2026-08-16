@@ -16,6 +16,7 @@ import android.os.VibratorManager
 import android.text.TextPaint
 import android.text.TextUtils
 import android.util.AttributeSet
+import android.util.SparseArray
 import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
@@ -84,6 +85,20 @@ class KeyboardView @JvmOverloads constructor(
     private val symbolPages: List<SymbolCatalog.Page> by lazy { SymbolCatalog.pages(Paint()) }
     private var pageIndex = 0
 
+    /** Which palette page is showing. Saved between sessions — there are a lot of pages. */
+    var symbolPage: Int
+        get() = pageIndex
+        set(value) {
+            if (symbolPages.isEmpty()) return
+            val clamped = value.coerceIn(0, symbolPages.size - 1)
+            if (clamped == pageIndex) return
+            pageIndex = clamped
+            if (layer == Layer.SYMBOL_PAD) {
+                rebuild()
+                invalidate()
+            }
+        }
+
     private fun currentPage(): SymbolCatalog.Page? =
         if (layer == Layer.SYMBOL_PAD) symbolPages.getOrNull(pageIndex) else null
 
@@ -104,7 +119,17 @@ class KeyboardView @JvmOverloads constructor(
 
     private var rows: List<KeyRow> = emptyList()
     private val placed = mutableListOf<PlacedKey>()
-    private var pressed: PlacedKey? = null
+
+    /** One finger on the keyboard. [handled] means a repeat or long press already fired for it. */
+    private class Touch(var placed: PlacedKey, var anchorX: Float) {
+        var swiped = false
+        var handled = false
+    }
+
+    private val touches = SparseArray<Touch>()
+
+    /** Whose key the preview bubble shows — the finger that landed most recently. */
+    private var previewPointerId = -1
 
     private val keyGap = dp(3f)
     private val keyRadius = dp(8f)
@@ -114,6 +139,11 @@ class KeyboardView @JvmOverloads constructor(
     // TextPaint rather than Paint so TextUtils.ellipsize can measure the clipboard preview.
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    // onDraw runs twice per keystroke over every key, so its shapes are reused rather than
+    // allocated. Each is filled in and handed straight to canvas — never held across a call.
+    private val iconPath = Path()
+    private val scratchRect = RectF()
 
     private val colBackground = color(R.color.kb_background)
     private val colKey = color(R.color.key_bg)
@@ -145,12 +175,10 @@ class KeyboardView @JvmOverloads constructor(
 
     /** Repeat (backspace) and long-press share one slot: no key ever does both. */
     private var holdRunnable: Runnable? = null
-    private var heldFired = false
+    private var holdPointerId = -1
 
-    /** Space-bar swipe bookkeeping. */
-    private var swipeAnchorX = 0f
+    /** How far the finger must travel on the space bar to move the cursor one character. */
     private var swipeStep = dp(24f)
-    private var swiped = false
 
     init {
         setBackgroundColor(colBackground)
@@ -269,69 +297,113 @@ class KeyboardView @JvmOverloads constructor(
 
     // ----------------------------------------------------------------- touch
 
+    /**
+     * Every pointer is tracked separately. Typing at speed means the next finger lands before the
+     * last one lifts, and those arrive as ACTION_POINTER_DOWN / ACTION_POINTER_UP — handling only
+     * ACTION_DOWN / ACTION_UP silently drops every overlapping key.
+     */
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                val key = keyAt(event.x, event.y) ?: return true
-                if (key.key.code == KeyCode.NONE) return true
-                press(key)
-                swipeAnchorX = event.x
-                swiped = false
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val index = event.actionIndex
+                beginTouch(event.getPointerId(index), event.getX(index), event.getY(index))
             }
 
             MotionEvent.ACTION_MOVE -> {
-                val current = pressed ?: return true
-                if (current.key.code == KeyCode.SPACE && config.spaceCursorSwipe) {
-                    var delta = event.x - swipeAnchorX
-                    while (abs(delta) >= swipeStep) {
-                        val steps = if (delta > 0) 1 else -1
-                        actionListener?.onCursorMove(steps)
-                        swipeAnchorX += swipeStep * steps
-                        delta = event.x - swipeAnchorX
-                        swiped = true
-                    }
-                    return true
-                }
-                // Sliding onto a different key re-targets, so a slightly-off press can be saved
-                // by dragging before lifting the finger.
-                if (!current.hit.contains(event.x, event.y)) {
-                    val next = keyAt(event.x, event.y)
-                    if (next != null && next !== current && !current.key.repeatable && !heldFired) {
-                        cancelHold()
-                        pressed = next
-                        swipeAnchorX = event.x
-                        invalidate()
-                    }
+                for (index in 0 until event.pointerCount) {
+                    moveTouch(event.getPointerId(index), event.getX(index), event.getY(index))
                 }
             }
 
-            MotionEvent.ACTION_UP -> {
-                val current = pressed
-                val alreadyHandled = heldFired
-                cancelHold()
-                pressed = null
-                invalidate()
-                if (current != null && !swiped && !alreadyHandled) emit(current.key)
-            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP ->
+                endTouch(event.getPointerId(event.actionIndex))
 
             MotionEvent.ACTION_CANCEL -> {
                 cancelHold()
-                pressed = null
+                touches.clear()
                 invalidate()
             }
         }
         return true
     }
 
-    private fun press(target: PlacedKey) {
-        pressed = target
+    private fun beginTouch(pointerId: Int, x: Float, y: Float) {
+        val target = keyAt(x, y) ?: return
+        if (target.key.code == KeyCode.NONE) return
+
+        commitEarlierTouches()
+        touches.put(pointerId, Touch(target, x))
+        previewPointerId = pointerId
         invalidate()
         feedback(target.key)
+
+        // Only one key can be held at a time; the newest finger takes the timer over.
+        cancelHold()
         when {
-            target.key.repeatable -> startRepeat(target.key)
-            target.key.longPress != null -> startLongPress(target.key)
+            target.key.repeatable -> startRepeat(pointerId, target.key)
+            target.key.longPress != null -> startLongPress(pointerId, target.key)
         }
+    }
+
+    /**
+     * A new finger landing settles whatever the fingers already down were resting on.
+     *
+     * Keys normally type on release so a slightly-off press can be dragged onto the right key,
+     * but with two fingers down that would order the output by *lift* — press ㅂ, press ㅈ, lift ㅈ,
+     * lift ㅂ and you get "ㅈㅂ". Committing the older key here keeps the output in press order,
+     * and makes fast typing feel more immediate as a side effect.
+     */
+    private fun commitEarlierTouches() {
+        for (index in 0 until touches.size()) {
+            val earlier = touches.valueAt(index)
+            if (earlier.handled || earlier.swiped) continue
+            earlier.handled = true
+            emit(earlier.placed.key)
+        }
+    }
+
+    private fun moveTouch(pointerId: Int, x: Float, y: Float) {
+        val touch = touches.get(pointerId) ?: return
+        val key = touch.placed.key
+
+        if (key.code == KeyCode.SPACE && config.spaceCursorSwipe) {
+            var delta = x - touch.anchorX
+            while (abs(delta) >= swipeStep) {
+                val steps = if (delta > 0) 1 else -1
+                actionListener?.onCursorMove(steps)
+                touch.anchorX += swipeStep * steps
+                delta = x - touch.anchorX
+                touch.swiped = true
+            }
+            return
+        }
+
+        // Sliding onto a different key re-targets, so a slightly-off press can be saved by
+        // dragging before lifting the finger.
+        if (touch.handled || key.repeatable || touch.placed.hit.contains(x, y)) return
+        val next = keyAt(x, y) ?: return
+        if (next === touch.placed || next.key.code == KeyCode.NONE) return
+        if (holdPointerId == pointerId) cancelHold()
+        touch.placed = next
+        touch.anchorX = x
+        invalidate()
+    }
+
+    private fun endTouch(pointerId: Int) {
+        // Released before the touch lookup: a repeat that outlived its key must still be stopped.
+        if (holdPointerId == pointerId) cancelHold()
+        val touch = touches.get(pointerId) ?: return
+        touches.remove(pointerId)
+        invalidate()
+        if (!touch.swiped && !touch.handled) emit(touch.placed.key)
+    }
+
+    private fun isPressed(candidate: PlacedKey): Boolean {
+        for (index in 0 until touches.size()) {
+            if (touches.valueAt(index).placed === candidate) return true
+        }
+        return false
     }
 
     /** Falls back to the nearest key so a tap in a gap still types something sensible. */
@@ -357,45 +429,57 @@ class KeyboardView @JvmOverloads constructor(
     private fun outputOf(key: Key): String {
         val shifted = shiftState != ShiftState.OFF &&
             (key.respondsToAutoShift || !shiftIsAutomatic)
-        if (!shifted) return key.code.toChar().toString()
-        key.shiftOutput?.let { return it }
-        return key.code.toChar().uppercaseChar().toString()
+        if (shifted) {
+            key.shiftOutput?.let { return it }
+            // Emoji live outside the BMP and have no upper case, so only plain chars are folded.
+            if (!Character.isSupplementaryCodePoint(key.code)) {
+                return key.code.toChar().uppercaseChar().toString()
+            }
+        }
+        return codePointText(key.code)
     }
 
-    private fun startRepeat(key: Key) {
-        var delay = 400L
-        heldFired = false
+    private fun codePointText(code: Int): String =
+        if (Character.isSupplementaryCodePoint(code)) String(Character.toChars(code))
+        else code.toChar().toString()
+
+    /** Holding backspace (or a page key) fires repeatedly, accelerating to a floor. */
+    private fun startRepeat(pointerId: Int, key: Key) {
+        val speed = config.repeatSpeed.coerceAtLeast(0.1f)
+        val floor = (REPEAT_FLOOR_MS / speed).toLong().coerceAtLeast(15L)
+        var delay = (REPEAT_START_MS / speed).toLong()
         val runnable = object : Runnable {
             override fun run() {
-                heldFired = true
+                touches.get(pointerId)?.handled = true
                 emit(key)
                 feedback(key)
-                delay = (delay * 0.75f).toLong().coerceAtLeast(45L)
+                delay = (delay * 0.75f).toLong().coerceAtLeast(floor)
                 handler.postDelayed(this, delay)
             }
         }
+        holdPointerId = pointerId
         holdRunnable = runnable
         handler.postDelayed(runnable, delay)
     }
 
-    /** Holding a key past [LONG_PRESS_MS] types its corner symbol instead of the key itself. */
-    private fun startLongPress(key: Key) {
-        heldFired = false
+    /** Holding a key past the configured delay types its corner symbol instead of the key. */
+    private fun startLongPress(pointerId: Int, key: Key) {
         val symbol = key.longPress ?: return
         val runnable = Runnable {
-            heldFired = true
+            touches.get(pointerId)?.handled = true
             actionListener?.onKey(symbol[0].code, symbol)
             feedback(key)
             invalidate() // the preview bubble switches to the symbol
         }
+        holdPointerId = pointerId
         holdRunnable = runnable
-        handler.postDelayed(runnable, LONG_PRESS_MS)
+        handler.postDelayed(runnable, config.longPressMs.toLong())
     }
 
     private fun cancelHold() {
         holdRunnable?.let { handler.removeCallbacks(it) }
         holdRunnable = null
-        heldFired = false
+        holdPointerId = -1
     }
 
     private fun feedback(key: Key) {
@@ -446,6 +530,7 @@ class KeyboardView @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         cancelHold()
+        touches.clear()
         super.onDetachedFromWindow()
     }
 
@@ -453,8 +538,8 @@ class KeyboardView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        for (p in placed) drawKey(canvas, p, p === pressed)
-        pressed?.let { drawPreview(canvas, it) }
+        for (p in placed) drawKey(canvas, p, isPressed(p))
+        touches.get(previewPointerId)?.let { drawPreview(canvas, it) }
     }
 
     private fun drawKey(canvas: Canvas, p: PlacedKey, isPressed: Boolean) {
@@ -523,15 +608,14 @@ class KeyboardView @JvmOverloads constructor(
         iconPaint.strokeWidth = strokeWidth * 0.75f
         val halfWidth = size * 0.36f
         val halfHeight = size * 0.5f
-        canvas.drawRoundRect(
-            RectF(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight),
-            size * 0.16f, size * 0.16f, iconPaint
-        )
+        scratchRect.set(cx - halfWidth, cy - halfHeight, cx + halfWidth, cy + halfHeight)
+        canvas.drawRoundRect(scratchRect, size * 0.16f, size * 0.16f, iconPaint)
         iconPaint.style = Paint.Style.FILL
-        canvas.drawRoundRect(
-            RectF(cx - halfWidth * 0.55f, cy - halfHeight * 1.2f, cx + halfWidth * 0.55f, cy - halfHeight * 0.7f),
-            size * 0.09f, size * 0.09f, iconPaint
+        scratchRect.set(
+            cx - halfWidth * 0.55f, cy - halfHeight * 1.2f,
+            cx + halfWidth * 0.55f, cy - halfHeight * 0.7f
         )
+        canvas.drawRoundRect(scratchRect, size * 0.09f, size * 0.09f, iconPaint)
     }
 
     /** The small symbol in the top-right corner, shown so the hold targets are discoverable. */
@@ -565,8 +649,14 @@ class KeyboardView @JvmOverloads constructor(
         val hintBand = if (key.longPress != null) height * config.hintSizeRatio * 0.85f else 0f
         val remaining = height - hintBand
 
-        val base = if (key.style == KeyStyle.FUNCTION) height * 0.34f
-        else min(height * 0.44f, remaining * 0.62f)
+        // Emoji carry their detail in the glyph rather than in a letterform, so they get drawn
+        // bigger than a letter would at the same key size.
+        val emoji = Character.isSupplementaryCodePoint(key.code)
+        val base = when {
+            key.style == KeyStyle.FUNCTION -> height * 0.34f
+            emoji -> min(height * 0.62f, remaining * 0.8f)
+            else -> min(height * 0.44f, remaining * 0.62f)
+        }
         textPaint.color = foreground
         textPaint.textSize = fitTextSize(label, p.draw.width() * 0.8f, base)
 
@@ -597,13 +687,11 @@ class KeyboardView @JvmOverloads constructor(
         fillPaint.color = colTextMuted
         val halfWidth = min(r.width() * 0.18f, dp(56f))
         val thickness = dp(2f)
-        canvas.drawRoundRect(
-            RectF(
-                r.centerX() - halfWidth, r.centerY() - thickness / 2f,
-                r.centerX() + halfWidth, r.centerY() + thickness / 2f
-            ),
-            thickness, thickness, fillPaint
+        scratchRect.set(
+            r.centerX() - halfWidth, r.centerY() - thickness / 2f,
+            r.centerX() + halfWidth, r.centerY() + thickness / 2f
         )
+        canvas.drawRoundRect(scratchRect, thickness, thickness, fillPaint)
     }
 
     private fun drawShift(canvas: Canvas, r: RectF, tint: Int, locked: Boolean) {
@@ -612,17 +700,16 @@ class KeyboardView @JvmOverloads constructor(
         val cy = r.centerY() - if (locked) s * 0.12f else 0f
         iconPaint.color = tint
         iconPaint.style = Paint.Style.FILL
-        val path = Path().apply {
-            moveTo(cx, cy - s)
-            lineTo(cx + s, cy + s * 0.1f)
-            lineTo(cx + s * 0.45f, cy + s * 0.1f)
-            lineTo(cx + s * 0.45f, cy + s * 0.8f)
-            lineTo(cx - s * 0.45f, cy + s * 0.8f)
-            lineTo(cx - s * 0.45f, cy + s * 0.1f)
-            lineTo(cx - s, cy + s * 0.1f)
-            close()
-        }
-        canvas.drawPath(path, iconPaint)
+        iconPath.reset()
+        iconPath.moveTo(cx, cy - s)
+        iconPath.lineTo(cx + s, cy + s * 0.1f)
+        iconPath.lineTo(cx + s * 0.45f, cy + s * 0.1f)
+        iconPath.lineTo(cx + s * 0.45f, cy + s * 0.8f)
+        iconPath.lineTo(cx - s * 0.45f, cy + s * 0.8f)
+        iconPath.lineTo(cx - s * 0.45f, cy + s * 0.1f)
+        iconPath.lineTo(cx - s, cy + s * 0.1f)
+        iconPath.close()
+        canvas.drawPath(iconPath, iconPaint)
         if (locked) {
             canvas.drawRect(cx - s * 0.45f, cy + s, cx + s * 0.45f, cy + s * 1.25f, iconPaint)
         }
@@ -637,15 +724,14 @@ class KeyboardView @JvmOverloads constructor(
         iconPaint.style = Paint.Style.STROKE
         iconPaint.strokeWidth = strokeWidth
         iconPaint.strokeJoin = Paint.Join.ROUND
-        val path = Path().apply {
-            moveTo(cx - w / 2f, cy)
-            lineTo(cx - w / 2f + h * 0.55f, cy - h / 2f)
-            lineTo(cx + w / 2f, cy - h / 2f)
-            lineTo(cx + w / 2f, cy + h / 2f)
-            lineTo(cx - w / 2f + h * 0.55f, cy + h / 2f)
-            close()
-        }
-        canvas.drawPath(path, iconPaint)
+        iconPath.reset()
+        iconPath.moveTo(cx - w / 2f, cy)
+        iconPath.lineTo(cx - w / 2f + h * 0.55f, cy - h / 2f)
+        iconPath.lineTo(cx + w / 2f, cy - h / 2f)
+        iconPath.lineTo(cx + w / 2f, cy + h / 2f)
+        iconPath.lineTo(cx - w / 2f + h * 0.55f, cy + h / 2f)
+        iconPath.close()
+        canvas.drawPath(iconPath, iconPaint)
         val x = h * 0.2f
         canvas.drawLine(cx + x * 0.2f - x, cy - x, cx + x * 0.2f + x, cy + x, iconPaint)
         canvas.drawLine(cx + x * 0.2f - x, cy + x, cx + x * 0.2f + x, cy - x, iconPaint)
@@ -659,45 +745,49 @@ class KeyboardView @JvmOverloads constructor(
         iconPaint.style = Paint.Style.STROKE
         iconPaint.strokeWidth = strokeWidth
         iconPaint.strokeJoin = Paint.Join.ROUND
-        val path = Path().apply {
-            moveTo(cx + s * 0.5f, cy - s * 0.5f)
-            lineTo(cx + s * 0.5f, cy + s * 0.25f)
-            lineTo(cx - s * 0.5f, cy + s * 0.25f)
-            moveTo(cx - s * 0.15f, cy - s * 0.1f)
-            lineTo(cx - s * 0.55f, cy + s * 0.25f)
-            lineTo(cx - s * 0.15f, cy + s * 0.6f)
-        }
-        canvas.drawPath(path, iconPaint)
+        iconPath.reset()
+        iconPath.moveTo(cx + s * 0.5f, cy - s * 0.5f)
+        iconPath.lineTo(cx + s * 0.5f, cy + s * 0.25f)
+        iconPath.lineTo(cx - s * 0.5f, cy + s * 0.25f)
+        iconPath.moveTo(cx - s * 0.15f, cy - s * 0.1f)
+        iconPath.lineTo(cx - s * 0.55f, cy + s * 0.25f)
+        iconPath.lineTo(cx - s * 0.15f, cy + s * 0.6f)
+        canvas.drawPath(iconPath, iconPaint)
     }
 
     /** Magnified bubble above the pressed key, clamped inside the view. */
-    private fun drawPreview(canvas: Canvas, p: PlacedKey) {
+    private fun drawPreview(canvas: Canvas, touch: Touch) {
         if (!config.previewEnabled) return
+        val p = touch.placed
         val key = p.key
         if (!key.isPrintable || key.code == KeyCode.SPACE) return
 
-        val label = if (heldFired) key.longPress ?: outputOf(key) else outputOf(key)
+        val label = if (touch.handled) key.longPress ?: outputOf(key) else outputOf(key)
         val bubbleWidth = maxOf(p.draw.width() * 1.25f, dp(44f))
         val bubbleHeight = p.draw.height() * 1.1f
         var left = p.draw.centerX() - bubbleWidth / 2f
         left = left.coerceIn(dp(2f), width - bubbleWidth - dp(2f))
         var top = p.draw.top - bubbleHeight - dp(6f)
         if (top < dp(2f)) top = p.draw.bottom + dp(6f)
-        val bubble = RectF(left, top, left + bubbleWidth, top + bubbleHeight)
+        scratchRect.set(left, top, left + bubbleWidth, top + bubbleHeight)
 
         fillPaint.color = colPreview
-        canvas.drawRoundRect(bubble, keyRadius, keyRadius, fillPaint)
+        canvas.drawRoundRect(scratchRect, keyRadius, keyRadius, fillPaint)
 
         textPaint.color = colText
-        textPaint.textSize = bubble.height() * 0.55f
+        textPaint.textSize = scratchRect.height() * 0.55f
         val fm = textPaint.fontMetrics
         canvas.drawText(
-            label, bubble.centerX(), bubble.centerY() - (fm.ascent + fm.descent) / 2f, textPaint
+            label,
+            scratchRect.centerX(),
+            scratchRect.centerY() - (fm.ascent + fm.descent) / 2f,
+            textPaint
         )
     }
 
     private companion object {
-        /** How long a key must be held before it types its corner symbol. */
-        const val LONG_PRESS_MS = 300L
+        /** Repeat cadence at speed 1.0: first fire after this, accelerating down to the floor. */
+        const val REPEAT_START_MS = 400f
+        const val REPEAT_FLOOR_MS = 45f
     }
 }

@@ -142,6 +142,34 @@
                 android:text="@string/hint_sound"
                 android:textAppearance="?attr/textAppearanceBodySmall" />
 
+            <TextView
+                android:id="@+id/repeatSpeedLabel"
+                style="@style/SliderLabel" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/repeatSpeedSlider"
+                style="@style/FullWidthSlider"
+                android:stepSize="25"
+                android:valueFrom="50"
+                android:valueTo="200" />
+
+            <TextView
+                android:id="@+id/longPressLabel"
+                style="@style/SliderLabel" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/longPressSlider"
+                style="@style/FullWidthSlider"
+                android:stepSize="50"
+                android:valueFrom="150"
+                android:valueTo="600" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/hint_timing"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
             <!--  feel -->
 
             <TextView

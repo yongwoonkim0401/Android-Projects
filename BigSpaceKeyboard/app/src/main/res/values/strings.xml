@@ -27,6 +27,10 @@
     <string name="label_vibrate_off">진동: 끔</string>
     <string name="hint_sound">시스템 설정에서 \'터치 사운드\'가 꺼져 있으면 여기서 올려도 소리가 나지 않습니다.</string>
 
+    <string name="label_repeat_speed">백스페이스 반복 속도: %d%%</string>
+    <string name="label_long_press_ms">길게 누르기 인식 시간: %d ms</string>
+    <string name="hint_timing">반복 속도는 백스페이스를 누르고 있을 때와 기호 팔레트의 페이지 넘김에 적용됩니다. 인식 시간이 짧을수록 기호가 빨리 나오지만, 평소 타자에서 실수로 나올 수 있습니다.</string>
+
     <string name="section_feel">입력 느낌</string>
     <string name="label_preview">누른 글자 미리보기</string>
     <string name="label_swipe">스페이스바 좌우 드래그로 커서 이동</string>
