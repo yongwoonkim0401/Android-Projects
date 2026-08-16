@@ -107,6 +107,62 @@ class KeyboardLayoutTest {
         assertEquals("첫 줄 둘째 줄 끝", rows.first().keys.first().label)
     }
 
+    /** 52자 = 6줄짜리 분류. 한 번에 4줄만 보이므로 2줄만큼 스크롤할 수 있다. */
+    private fun samplePage() = SymbolCatalog.Page(
+        "테스트",
+        (('a'..'z') + ('A'..'Z')).map { it.toString() },
+    )
+
+    private fun gridLabels(page: SymbolCatalog.Page, scrollRow: Int) =
+        KeyboardLayouts.rowsFor(Layer.SYMBOL_PAD, config, Layer.LETTERS, page, null, scrollRow)
+            .dropLast(1)
+            .map { row -> row.keys.joinToString("") { it.label } }
+
+    @Test
+    fun `분류 하나가 페이지 하나`() {
+        val page = samplePage()
+        assertEquals(6, page.rowCount)
+        assertEquals("테스트", page.label)
+    }
+
+    @Test
+    fun `스크롤한 만큼 뒤쪽 기호가 보인다`() {
+        val page = samplePage()
+
+        // 처음에는 1~4줄 (a~N)
+        val top = gridLabels(page, 0)
+        assertEquals("abcdefghij", top[0])
+        assertEquals("EFGHIJKLMN", top[3])
+
+        // 두 줄 내리면 3~6줄 (u~Z)
+        val scrolled = gridLabels(page, 2)
+        assertEquals("uvwxyzABCD", scrolled[0])
+        assertEquals("OPQRSTUVWX", scrolled[2])
+    }
+
+    @Test
+    fun `분류 끝의 남는 자리는 빈 칸으로 채운다`() {
+        val lastGrid = KeyboardLayouts
+            .rowsFor(Layer.SYMBOL_PAD, config, Layer.LETTERS, samplePage(), null, 2)
+            .dropLast(1).last()
+
+        assertEquals("YZ", lastGrid.keys.joinToString("") { it.label })
+        // 남는 자리도 칸은 유지해야 마지막 줄 키가 늘어나지 않는다
+        assertEquals(10, lastGrid.keys.size)
+        assertEquals(8, lastGrid.keys.count { it.code == KeyCode.NONE })
+    }
+
+    @Test
+    fun `스크롤해도 줄 수와 칸 수는 그대로다`() {
+        for (scrollRow in 0..3) {
+            val rows = KeyboardLayouts.rowsFor(
+                Layer.SYMBOL_PAD, config, Layer.LETTERS, samplePage(), null, scrollRow
+            )
+            assertEquals(5, rows.size)
+            rows.dropLast(1).forEach { assertEquals(10f, it.units, 0.001f) }
+        }
+    }
+
     @Test
     fun `쉼표와 마침표는 길게 눌러도 그대로다`() {
         val bottom = rows(Layer.LETTERS).last()

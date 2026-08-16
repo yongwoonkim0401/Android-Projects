@@ -22,6 +22,7 @@ import android.view.MotionEvent
 import android.view.View
 import androidx.core.content.ContextCompat
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -85,7 +86,10 @@ class KeyboardView @JvmOverloads constructor(
     private val symbolPages: List<SymbolCatalog.Page> by lazy { SymbolCatalog.pages(Paint()) }
     private var pageIndex = 0
 
-    /** Which palette page is showing. Saved between sessions — there are a lot of pages. */
+    /** How far the current category is scrolled, in whole grid rows. */
+    private var padScrollRow = 0
+
+    /** Which palette page is showing. Saved between sessions. */
     var symbolPage: Int
         get() = pageIndex
         set(value) {
@@ -93,11 +97,26 @@ class KeyboardView @JvmOverloads constructor(
             val clamped = value.coerceIn(0, symbolPages.size - 1)
             if (clamped == pageIndex) return
             pageIndex = clamped
+            padScrollRow = 0
             if (layer == Layer.SYMBOL_PAD) {
                 rebuild()
                 invalidate()
             }
         }
+
+    /** Rows of the current category that sit below the visible window. */
+    private fun maxScrollRow(): Int {
+        val page = currentPage() ?: return 0
+        return (page.rowCount - SymbolCatalog.ROWS).coerceAtLeast(0)
+    }
+
+    private fun scrollPad(rows: Int) {
+        val target = (padScrollRow + rows).coerceIn(0, maxScrollRow())
+        if (target == padScrollRow) return
+        padScrollRow = target
+        rebuild()
+        invalidate()
+    }
 
     private fun currentPage(): SymbolCatalog.Page? =
         if (layer == Layer.SYMBOL_PAD) symbolPages.getOrNull(pageIndex) else null
@@ -121,9 +140,12 @@ class KeyboardView @JvmOverloads constructor(
     private val placed = mutableListOf<PlacedKey>()
 
     /** One finger on the keyboard. [handled] means a repeat or long press already fired for it. */
-    private class Touch(var placed: PlacedKey, var anchorX: Float) {
+    private class Touch(var placed: PlacedKey, var anchorX: Float, var anchorY: Float) {
         var swiped = false
         var handled = false
+
+        /** Set once the finger has committed to scrolling the symbol grid. */
+        var scrolling = false
     }
 
     private val touches = SparseArray<Touch>()
@@ -131,6 +153,7 @@ class KeyboardView @JvmOverloads constructor(
     /** Whose key the preview bubble shows — the finger that landed most recently. */
     private var previewPointerId = -1
 
+    private val scrollSlop = dp(6f)
     private val keyGap = dp(3f)
     private val keyRadius = dp(8f)
     private val strokeWidth = dp(2f)
@@ -180,6 +203,11 @@ class KeyboardView @JvmOverloads constructor(
     /** How far the finger must travel on the space bar to move the cursor one character. */
     private var swipeStep = dp(24f)
 
+    /** Vertical extent of the scrollable symbol grid, filled in by [place]. */
+    private var gridTop = 0f
+    private var gridBottom = 0f
+    private var gridRowHeight = 0f
+
     init {
         setBackgroundColor(colBackground)
         isHapticFeedbackEnabled = true
@@ -193,13 +221,16 @@ class KeyboardView @JvmOverloads constructor(
     private fun color(id: Int) = ContextCompat.getColor(context, id)
 
     private fun rebuild() {
-        rows = KeyboardLayouts.rowsFor(layer, config, textLayer, currentPage(), clipboardText)
+        rows = KeyboardLayouts.rowsFor(
+            layer, config, textLayer, currentPage(), clipboardText, padScrollRow
+        )
         if (width > 0) place()
     }
 
     private fun movePage(step: Int) {
         if (symbolPages.isEmpty()) return
         pageIndex = (pageIndex + step + symbolPages.size) % symbolPages.size
+        padScrollRow = 0
         rebuild()
         invalidate()
     }
@@ -244,8 +275,15 @@ class KeyboardView @JvmOverloads constructor(
         val keyHeight = keyHeight(availableWidth)
         var top = paddingTop.toFloat()
 
+        // The grid is every row between an optional clipboard strip and the space bar row.
+        val firstGridRow = if (clipboardText != null) 1 else 0
+        val lastGridRow = rows.size - 2
+        gridRowHeight = keyHeight
+
         for ((rowIndex, row) in rows.withIndex()) {
             val rowHeight = keyHeight * row.heightWeight
+            if (rowIndex == firstGridRow) gridTop = top
+            if (rowIndex == lastGridRow) gridBottom = top + rowHeight
             val unit = availableWidth / row.units
             var x = paddingLeft + row.sideGap * unit
             val first = placed.size
@@ -333,7 +371,7 @@ class KeyboardView @JvmOverloads constructor(
         if (target.key.code == KeyCode.NONE) return
 
         commitEarlierTouches()
-        touches.put(pointerId, Touch(target, x))
+        touches.put(pointerId, Touch(target, x, y))
         previewPointerId = pointerId
         invalidate()
         feedback(target.key)
@@ -367,6 +405,8 @@ class KeyboardView @JvmOverloads constructor(
         val touch = touches.get(pointerId) ?: return
         val key = touch.placed.key
 
+        if (scrollGrid(pointerId, touch, y)) return
+
         if (key.code == KeyCode.SPACE && config.spaceCursorSwipe) {
             var delta = x - touch.anchorX
             while (abs(delta) >= swipeStep) {
@@ -388,6 +428,38 @@ class KeyboardView @JvmOverloads constructor(
         touch.placed = next
         touch.anchorX = x
         invalidate()
+    }
+
+    /**
+     * Dragging up or down inside the symbol grid scrolls the category instead of typing.
+     * Returns true once the finger has committed to scrolling, so it stops being a key press.
+     *
+     * A category is one page however long it is — 180-odd emoji would otherwise be five pages to
+     * click through — so this is what keeps the palette at one page per category.
+     */
+    private fun scrollGrid(pointerId: Int, touch: Touch, y: Float): Boolean {
+        if (layer != Layer.SYMBOL_PAD) return false
+        if (!touch.scrolling) {
+            if (touch.anchorY < gridTop || touch.anchorY > gridBottom) return false
+            if (maxScrollRow() == 0) return false
+            if (abs(y - touch.anchorY) < scrollSlop) return false
+            touch.scrolling = true
+            touch.swiped = true // released without typing
+            if (holdPointerId == pointerId) cancelHold()
+        }
+
+        val step = gridRowHeight
+        if (step <= 0f) return true
+        // Dragging down reveals earlier rows, the way a scrolling list behaves.
+        while (y - touch.anchorY >= step) {
+            scrollPad(-1)
+            touch.anchorY += step
+        }
+        while (y - touch.anchorY <= -step) {
+            scrollPad(1)
+            touch.anchorY -= step
+        }
+        return true
     }
 
     private fun endTouch(pointerId: Int) {
@@ -539,7 +611,37 @@ class KeyboardView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         for (p in placed) drawKey(canvas, p, isPressed(p))
+        drawGridScrollbar(canvas)
         touches.get(previewPointerId)?.let { drawPreview(canvas, it) }
+    }
+
+    /** Shows how far into the category the grid is scrolled. Absent when it all fits. */
+    private fun drawGridScrollbar(canvas: Canvas) {
+        if (layer != Layer.SYMBOL_PAD) return
+        val page = currentPage() ?: return
+        val maxScroll = maxScrollRow()
+        if (maxScroll <= 0) return
+
+        val inset = dp(3f)
+        val barWidth = dp(3f)
+        val trackTop = gridTop + inset
+        val trackHeight = gridBottom - gridTop - inset * 2f
+        if (trackHeight <= 0f) return
+        val right = width - inset
+        val radius = barWidth / 2f
+
+        fillPaint.color = colTextMuted
+        fillPaint.alpha = 45
+        scratchRect.set(right - barWidth, trackTop, right, trackTop + trackHeight)
+        canvas.drawRoundRect(scratchRect, radius, radius, fillPaint)
+
+        val thumbHeight = max(
+            trackHeight * SymbolCatalog.ROWS / page.rowCount.toFloat(), dp(18f)
+        )
+        val thumbTop = trackTop + (trackHeight - thumbHeight) * padScrollRow / maxScroll
+        fillPaint.color = colTextMuted
+        scratchRect.set(right - barWidth, thumbTop, right, thumbTop + thumbHeight)
+        canvas.drawRoundRect(scratchRect, radius, radius, fillPaint)
     }
 
     private fun drawKey(canvas: Canvas, p: PlacedKey, isPressed: Boolean) {

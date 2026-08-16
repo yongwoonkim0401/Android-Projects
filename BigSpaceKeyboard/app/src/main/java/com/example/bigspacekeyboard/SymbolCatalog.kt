@@ -12,23 +12,21 @@ object SymbolCatalog {
 
     const val COLUMNS = 10
 
-    /** Four rows, same as every other layer, so the keyboard never changes height. */
+    /** 한 번에 보이는 줄 수. 다른 레이어와 같아야 키보드 높이가 변하지 않는다. */
     const val ROWS = 4
-    private const val PER_PAGE = COLUMNS * ROWS
 
+    /**
+     * 대분류 하나가 페이지 하나. 40개씩 잘라 페이지를 늘리는 대신, 넘치는 줄은 세로로 스크롤한다.
+     */
     class Page(
         val category: String,
-        val indexInCategory: Int,
-        val pagesInCategory: Int,
         /** 코드포인트 하나가 문자열 하나. 이모지는 BMP 밖이라 Char로는 담기지 않는다. */
         val symbols: List<String>,
     ) {
-        val label: String
-            get() = if (pagesInCategory > 1) {
-                "$category ${indexInCategory + 1}/$pagesInCategory"
-            } else {
-                category
-            }
+        val label: String get() = category
+
+        /** 10칸짜리 줄로 몇 줄이 나오는지. [ROWS]보다 크면 스크롤할 게 있다는 뜻. */
+        val rowCount: Int get() = (symbols.size + COLUMNS - 1) / COLUMNS
     }
 
     private val CATEGORIES: List<Pair<String, String>> = listOf(
@@ -73,11 +71,7 @@ object SymbolCatalog {
         val built = mutableListOf<Page>()
         for ((category, source) in CATEGORIES + EMOJI) {
             val available = codePoints(source).distinct().filter { paint.hasGlyph(it) }
-            if (available.isEmpty()) continue
-            val chunks = available.chunked(PER_PAGE)
-            chunks.forEachIndexed { index, chunk ->
-                built.add(Page(category, index, chunks.size, chunk))
-            }
+            if (available.isNotEmpty()) built.add(Page(category, available))
         }
         cache = built
         return built

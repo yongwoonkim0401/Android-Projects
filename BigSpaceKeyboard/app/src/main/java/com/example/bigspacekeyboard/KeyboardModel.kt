@@ -270,15 +270,17 @@ object KeyboardLayouts {
         textLayer: Layer,
         page: SymbolCatalog.Page?,
         clipboard: CharSequence? = null,
+        scrollRow: Int = 0,
     ): List<KeyRow> =
         (if (clipboard != null) listOf(clipRow(clipboard)) else emptyList()) +
-            keyRowsFor(layer, config, textLayer, page)
+            keyRowsFor(layer, config, textLayer, page, scrollRow)
 
     private fun keyRowsFor(
         layer: Layer,
         config: KeyboardConfig,
         textLayer: Layer,
         page: SymbolCatalog.Page?,
+        scrollRow: Int,
     ): List<KeyRow> = when (layer) {
 
         Layer.LETTERS -> listOf(
@@ -323,7 +325,7 @@ object KeyboardLayouts {
             ),
         )
 
-        Layer.SYMBOL_PAD -> symbolPadRows(config, textLayer, page)
+        Layer.SYMBOL_PAD -> symbolPadRows(config, textLayer, page, scrollRow)
     }
 
     private fun textBottomLeft() = listOf(
@@ -333,18 +335,21 @@ object KeyboardLayouts {
     )
 
     /**
-     * 10 x 3 grid of symbols. Short pages are padded with blanks so the last row keeps the same
-     * key width as the rows above it instead of stretching.
+     * The window of the category currently on screen: 10 columns by [SymbolCatalog.ROWS] rows,
+     * starting [scrollRow] rows into it. Slots past the end are blanks so a short category keeps
+     * the same key width as a full one instead of stretching.
      */
     private fun symbolPadRows(
         config: KeyboardConfig,
         textLayer: Layer,
         page: SymbolCatalog.Page?,
+        scrollRow: Int,
     ): List<KeyRow> {
         val symbols = page?.symbols.orEmpty()
+        val first = scrollRow * SymbolCatalog.COLUMNS
         val gridRows = (0 until SymbolCatalog.ROWS).map { row ->
             KeyRow((0 until SymbolCatalog.COLUMNS).map { column ->
-                val symbol = symbols.getOrNull(row * SymbolCatalog.COLUMNS + column)
+                val symbol = symbols.getOrNull(first + row * SymbolCatalog.COLUMNS + column)
                 if (symbol == null) Key(KeyCode.NONE) else Key(symbol.codePointAt(0), symbol)
             })
         }
@@ -352,15 +357,10 @@ object KeyboardLayouts {
             config,
             listOf(
                 textLayerKey(textLayer, 1.25f),
-                // Repeatable: with the emoji categories there are ~30 pages to walk through.
-                Key(
-                    KeyCode.PAGE_PREV, "◀",
-                    width = 1.125f, style = KeyStyle.FUNCTION, repeatable = true,
-                ),
-                Key(
-                    KeyCode.PAGE_NEXT, "▶",
-                    width = 1.125f, style = KeyStyle.FUNCTION, repeatable = true,
-                ),
+                // One tap per category. Not repeatable: a category is a destination, and there
+                // are few enough of them that holding would just overshoot.
+                Key(KeyCode.PAGE_PREV, "◀", width = 1.125f, style = KeyStyle.FUNCTION),
+                Key(KeyCode.PAGE_NEXT, "▶", width = 1.125f, style = KeyStyle.FUNCTION),
             ),
             listOf(
                 backspaceKey(width = 1f),
