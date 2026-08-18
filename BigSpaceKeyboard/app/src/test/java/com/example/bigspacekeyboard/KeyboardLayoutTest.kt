@@ -164,6 +164,99 @@ class KeyboardLayoutTest {
     }
 
     @Test
+    fun `설정 패널은 페이지마다 네 줄을 꽉 채운다`() {
+        assertEquals(KeyboardLayouts.TEXT_ROWS.toInt(), KeyboardSettings.ROWS)
+        // 빈 줄이 생기면 페이지에 구멍이 뚫린다
+        assertEquals(0, KeyboardSettings.SPECS.size % KeyboardSettings.ROWS)
+        assertEquals(KeyboardSettings.SPECS.size / KeyboardSettings.ROWS, KeyboardSettings.pageCount)
+        assertEquals(KeyboardSettings.pageCount, KeyboardSettings.PAGE_NAMES.size)
+    }
+
+    @Test
+    fun `설정 한 줄은 이름과 값 그리고 빼기 더하기`() {
+        val row = KeyboardLayouts
+            .rowsFor(Layer.SETTINGS, config, Layer.LETTERS, null, null, 0, 0)
+            .first()
+        val spec = KeyboardSettings.SPECS.first()
+
+        assertEquals(listOf(spec.name, "−", "+"), row.keys.map { it.label })
+        assertEquals(spec.valueOf(config), row.keys.first().trailing)
+        // 이름과 값은 글자일 뿐, 눌러도 아무 일이 없어야 한다
+        assertTrue(row.keys.first().isInert)
+        assertTrue(row.keys.drop(1).none { it.isInert })
+    }
+
+    @Test
+    fun `설정 페이지를 넘기면 다음 네 가지가 나온다`() {
+        val second = KeyboardLayouts
+            .rowsFor(Layer.SETTINGS, config, Layer.LETTERS, null, null, 0, 1)
+            .dropLast(1)
+            .map { it.keys.first().label }
+        assertEquals(
+            KeyboardSettings.SPECS.drop(KeyboardSettings.ROWS).map { it.name },
+            second,
+        )
+    }
+
+    @Test
+    fun `더하기 빼기는 한 눈금씩 움직이고 양 끝에서 멈춘다`() {
+        val spec = KeyboardSettings.SPECS.first { it.name == "스페이스바 폭" }
+        val start = config.spaceWidthUnits
+
+        assertEquals(start + 0.5f, spec.stepped(config, 1).spaceWidthUnits, 0.001f)
+        assertEquals(start - 0.5f, spec.stepped(config, -1).spaceWidthUnits, 0.001f)
+
+        // 끝까지 눌러도 범위를 벗어나지 않는다
+        var floor = config
+        var ceiling = config
+        repeat(30) {
+            floor = spec.stepped(floor, -1)
+            ceiling = spec.stepped(ceiling, 1)
+        }
+        assertEquals(spec.stops.first(), floor.spaceWidthUnits, 0.001f)
+        assertEquals(spec.stops.last(), ceiling.spaceWidthUnits, 0.001f)
+    }
+
+    @Test
+    fun `눈금 사이에 있던 값도 가장 가까운 눈금으로 붙는다`() {
+        val spec = KeyboardSettings.SPECS.first { it.name == "키 높이" }
+        // 0.99 는 눈금이 아니다: 1.00 으로 붙은 뒤 한 칸 올라가야 한다
+        val stepped = spec.stepped(config.copy(keyHeightRatio = 0.99f), 1)
+        assertEquals(1.05f, stepped.keyHeightRatio, 0.001f)
+    }
+
+    @Test
+    fun `설정으로 가는 길은 모든 레이어의 같은 자리에 있다`() {
+        for (layer in Layer.values()) {
+            val corner = rows(layer).last().keys.first { it.subRow == 1 }
+            assertEquals("$layer 의 왼쪽 아래 힌트", KeyboardLayouts.SETTINGS_HINT, corner.longPress)
+            assertEquals(
+                "$layer 의 왼쪽 아래 길게 누르기",
+                if (layer == Layer.SETTINGS) KeyCode.SETTINGS_APP else KeyCode.SETTINGS,
+                corner.longPressCode,
+            )
+        }
+    }
+
+    @Test
+    fun `조절 키 코드는 설정 하나에 짝 하나씩만 쓴다`() {
+        val codes = KeyboardSettings.SPECS.indices
+            .flatMap { listOf(KeyCode.settingDown(it), KeyCode.settingUp(it)) }
+        assertEquals(codes.size, codes.distinct().size)
+        // NONE 을 비롯한 다른 명령과 겹치면 안 된다
+        assertTrue(codes.all { it <= KeyCode.SETTING_BASE })
+
+        for (index in KeyboardSettings.SPECS.indices) {
+            assertEquals(index, KeyCode.settingIndex(KeyCode.settingDown(index)))
+            assertEquals(index, KeyCode.settingIndex(KeyCode.settingUp(index)))
+            assertEquals(-1, KeyCode.settingSteps(KeyCode.settingDown(index)))
+            assertEquals(1, KeyCode.settingSteps(KeyCode.settingUp(index)))
+        }
+        assertEquals(-1, KeyCode.settingIndex(KeyCode.NONE))
+        assertEquals(-1, KeyCode.settingIndex(KeyCode.BACKSPACE))
+    }
+
+    @Test
     fun `쉼표와 마침표는 길게 눌러도 그대로다`() {
         val bottom = rows(Layer.LETTERS).last()
         val comma = bottom.keys.first { it.code == ','.code }

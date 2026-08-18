@@ -43,6 +43,9 @@ class KeyboardView @JvmOverloads constructor(
 
         /** Horizontal swipe over the space bar; [steps] is negative for left. */
         fun onCursorMove(steps: Int)
+
+        /** The on-keyboard settings panel changed something; the host persists it. */
+        fun onConfigChange(newConfig: KeyboardConfig)
     }
 
     var actionListener: OnKeyboardActionListener? = null
@@ -88,6 +91,9 @@ class KeyboardView @JvmOverloads constructor(
 
     /** How far the current category is scrolled, in whole grid rows. */
     private var padScrollRow = 0
+
+    /** Which page of the settings panel is showing. */
+    private var settingsPage = 0
 
     /** Which palette page is showing. Saved between sessions. */
     var symbolPage: Int
@@ -222,17 +228,35 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun rebuild() {
         rows = KeyboardLayouts.rowsFor(
-            layer, config, textLayer, currentPage(), clipboardText, padScrollRow
+            layer, config, textLayer, currentPage(), clipboardText, padScrollRow, settingsPage
         )
         if (width > 0) place()
     }
 
+    /** ◀ / ▶ mean the symbol category on the pad and the settings page in the panel. */
     private fun movePage(step: Int) {
-        if (symbolPages.isEmpty()) return
-        pageIndex = (pageIndex + step + symbolPages.size) % symbolPages.size
-        padScrollRow = 0
+        if (layer == Layer.SETTINGS) {
+            val count = KeyboardSettings.pageCount
+            settingsPage = (settingsPage + step + count) % count
+        } else {
+            if (symbolPages.isEmpty()) return
+            pageIndex = (pageIndex + step + symbolPages.size) % symbolPages.size
+            padScrollRow = 0
+        }
         rebuild()
         invalidate()
+    }
+
+    /**
+     * A − or + in the settings panel. The change is applied to this view at once — the space bar
+     * really does grow under the finger that is growing it — and handed to the host to persist.
+     */
+    private fun adjustSetting(code: Int) {
+        val spec = KeyboardSettings.SPECS.getOrNull(KeyCode.settingIndex(code)) ?: return
+        val next = spec.stepped(config, KeyCode.settingSteps(code))
+        if (next == config) return
+        config = next
+        actionListener?.onConfigChange(next)
     }
 
     // ---------------------------------------------------------------- layout
@@ -368,7 +392,7 @@ class KeyboardView @JvmOverloads constructor(
 
     private fun beginTouch(pointerId: Int, x: Float, y: Float) {
         val target = keyAt(x, y) ?: return
-        if (target.key.code == KeyCode.NONE) return
+        if (target.key.isInert) return
 
         commitEarlierTouches()
         touches.put(pointerId, Touch(target, x, y))
@@ -489,12 +513,14 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun emit(key: Key) {
-        // Paging is pure view state, so it never reaches the service.
+        // Paging and the settings panel are the view's own business, so they never reach the
+        // service as key presses — a settings change goes back as a whole config instead.
+        if (key.isInert) return
         when (key.code) {
-            KeyCode.NONE -> return
             KeyCode.PAGE_PREV -> return movePage(-1)
             KeyCode.PAGE_NEXT -> return movePage(1)
         }
+        if (key.code <= KeyCode.SETTING_BASE) return adjustSetting(key.code)
         actionListener?.onKey(key.code, if (key.isPrintable) outputOf(key) else null)
     }
 
@@ -534,12 +560,16 @@ class KeyboardView @JvmOverloads constructor(
         handler.postDelayed(runnable, delay)
     }
 
-    /** Holding a key past the configured delay types its corner symbol instead of the key. */
+    /**
+     * Holding a key past the configured delay types its corner symbol instead of the key — or,
+     * on a function key, runs the command its corner stands for.
+     */
     private fun startLongPress(pointerId: Int, key: Key) {
         val symbol = key.longPress ?: return
+        val code = key.longPressCode ?: symbol[0].code
         val runnable = Runnable {
             touches.get(pointerId)?.handled = true
-            actionListener?.onKey(symbol[0].code, symbol)
+            if (code >= 0) actionListener?.onKey(code, symbol) else actionListener?.onKey(code, null)
             feedback(key)
             invalidate() // the preview bubble switches to the symbol
         }
@@ -647,6 +677,7 @@ class KeyboardView @JvmOverloads constructor(
     private fun drawKey(canvas: Canvas, p: PlacedKey, isPressed: Boolean) {
         val key = p.key
         if (key.code == KeyCode.NONE) return
+        if (key.code == KeyCode.LABEL) return drawSettingLabel(canvas, p)
         fillPaint.color = when (key.style) {
             KeyStyle.NORMAL -> if (isPressed) colKeyPressed else colKey
             KeyStyle.FUNCTION -> if (isPressed) colFnPressed else colFn
@@ -720,6 +751,28 @@ class KeyboardView @JvmOverloads constructor(
         canvas.drawRoundRect(scratchRect, size * 0.09f, size * 0.09f, iconPaint)
     }
 
+    /**
+     * A settings row's text. No key is drawn behind it: it is not something to press, and the
+     * only pressable things on the row should look like the only pressable things on the row.
+     */
+    private fun drawSettingLabel(canvas: Canvas, p: PlacedKey) {
+        val r = p.draw
+        val size = min(r.height() * 0.38f, dp(17f))
+        val fm = textPaint.let { it.textSize = size; it.fontMetrics }
+        val baseline = r.centerY() - (fm.ascent + fm.descent) / 2f
+
+        textPaint.textAlign = Paint.Align.LEFT
+        textPaint.color = colTextMuted
+        canvas.drawText(p.key.label, r.left + dp(4f), baseline, textPaint)
+
+        p.key.trailing?.let { value ->
+            textPaint.textAlign = Paint.Align.RIGHT
+            textPaint.color = colText
+            canvas.drawText(value, r.right - dp(4f), baseline, textPaint)
+        }
+        textPaint.textAlign = Paint.Align.CENTER // every other label is centred
+    }
+
     /** The small symbol in the top-right corner, shown so the hold targets are discoverable. */
     private fun drawLongPressHint(canvas: Canvas, p: PlacedKey) {
         val symbol = p.key.longPress ?: return
@@ -778,12 +831,13 @@ class KeyboardView @JvmOverloads constructor(
      * the same space doubles as the page indicator, which costs no layout width.
      */
     private fun drawSpaceHint(canvas: Canvas, r: RectF) {
-        val page = currentPage()
-        if (page != null) {
+        val caption = currentPage()?.label
+            ?: if (layer == Layer.SETTINGS) KeyboardSettings.pageName(settingsPage) else null
+        if (caption != null) {
             textPaint.color = colTextMuted
-            textPaint.textSize = fitTextSize(page.label, r.width() * 0.8f, r.height() * 0.3f)
+            textPaint.textSize = fitTextSize(caption, r.width() * 0.8f, r.height() * 0.3f)
             val fm = textPaint.fontMetrics
-            canvas.drawText(page.label, r.centerX(), r.centerY() - (fm.ascent + fm.descent) / 2f, textPaint)
+            canvas.drawText(caption, r.centerX(), r.centerY() - (fm.ascent + fm.descent) / 2f, textPaint)
             return
         }
         fillPaint.color = colTextMuted

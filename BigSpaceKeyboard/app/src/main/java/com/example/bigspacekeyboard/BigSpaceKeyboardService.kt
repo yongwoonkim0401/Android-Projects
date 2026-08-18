@@ -3,6 +3,7 @@ package com.example.bigspacekeyboard
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.inputmethodservice.InputMethodService
 import android.os.Build
 import android.os.SystemClock
@@ -193,6 +194,16 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
                 updateShiftState()
             }
 
+            KeyCode.SETTINGS -> {
+                finishHangul(ic)
+                keyboardView.layer = Layer.SETTINGS
+            }
+
+            KeyCode.SETTINGS_APP -> {
+                finishHangul(ic)
+                openSettingsApp()
+            }
+
             KeyCode.LANGUAGE -> {
                 finishHangul(ic)
                 val next =
@@ -220,6 +231,34 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
                 if (code == KeyCode.SPACE || code == '.'.code) updateShiftState()
             }
         }
+    }
+
+    /**
+     * The panel changed a value. Saved straight away rather than on dismissal: the keyboard is
+     * torn down and rebuilt constantly, and a setting the user watched take effect must not come
+     * back undone the next time the keyboard opens.
+     */
+    override fun onConfigChange(newConfig: KeyboardConfig) {
+        KeyPrefs.save(this, newConfig)
+        hangul.doubleTapEnabled = newConfig.doubleTapJamo
+    }
+
+    /**
+     * The panel covers what is worth changing mid-sentence; everything else lives in the app.
+     * Getting there means leaving the field being typed into, so it is a deliberate second hold
+     * rather than a key anyone can brush.
+     */
+    private fun openSettingsApp() {
+        // Started before the keyboard is dismissed: an input method may launch an activity while
+        // its window is up, and hiding first would drop the very thing that permits it.
+        startActivity(
+            Intent(this, MainActivity::class.java).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+            )
+        )
+        requestHideSelf(0)
     }
 
     override fun onCursorMove(steps: Int) {
@@ -307,14 +346,23 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
     }
 
     /**
-     * Follows the field's auto-capitalisation hint (start of sentence, name fields, ...).
-     * Only meaningful for the Latin layer — on the Hangul layer Shift picks doubled consonants,
-     * so arming it automatically would type ㅃ where the user wanted ㅂ.
+     * Follows the field's auto-capitalisation hint (start of sentence, name fields, ...), when it
+     * is switched on at all. Only meaningful for the Latin layer — on the Hangul layer Shift picks
+     * doubled consonants, so arming it automatically would type ㅃ where the user wanted ㅂ.
      */
     private fun updateShiftState() {
         if (!::keyboardView.isInitialized) return
         if (keyboardView.shiftState == ShiftState.LOCKED) return
         if (keyboardView.layer != Layer.LETTERS) return
+
+        // Left alone entirely when off, so a Shift the user pressed themselves still stands.
+        if (!keyboardView.config.autoCapitalize) {
+            if (keyboardView.shiftIsAutomatic) {
+                keyboardView.shiftIsAutomatic = false
+                keyboardView.shiftState = ShiftState.OFF
+            }
+            return
+        }
 
         val editorInfo = currentInputEditorInfo
         val ic = currentInputConnection

@@ -16,6 +16,7 @@ object KeyPrefs {
     private const val SWIPE = "space_cursor_swipe"
     private const val HANGUL = "text_layer_hangul"
     private const val DOUBLE_TAP = "double_tap_jamo"
+    private const val AUTO_CAPS = "auto_capitalize"
     private const val REPEAT_SPEED = "repeat_speed"
     private const val LONG_PRESS = "long_press_ms"
     private const val SYMBOL_PAGE = "symbol_page"
@@ -36,6 +37,7 @@ object KeyPrefs {
             vibrateStrength = p.getFloat(VIBRATE, defaults.vibrateStrength),
             spaceCursorSwipe = p.getBoolean(SWIPE, defaults.spaceCursorSwipe),
             doubleTapJamo = p.getBoolean(DOUBLE_TAP, defaults.doubleTapJamo),
+            autoCapitalize = p.getBoolean(AUTO_CAPS, defaults.autoCapitalize),
             repeatSpeed = p.getFloat(REPEAT_SPEED, defaults.repeatSpeed),
             longPressMs = p.getInt(LONG_PRESS, defaults.longPressMs),
         )
@@ -52,6 +54,7 @@ object KeyPrefs {
             .putFloat(VIBRATE, config.vibrateStrength)
             .putBoolean(SWIPE, config.spaceCursorSwipe)
             .putBoolean(DOUBLE_TAP, config.doubleTapJamo)
+            .putBoolean(AUTO_CAPS, config.autoCapitalize)
             .putFloat(REPEAT_SPEED, config.repeatSpeed)
             .putInt(LONG_PRESS, config.longPressMs)
             .apply()

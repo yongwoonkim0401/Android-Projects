@@ -61,6 +61,14 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
     override fun onResume() {
         super.onResume()
         updateStatus()
+        // The keyboard's own panel may have moved things since this screen was last looked at —
+        // including on the way here, since holding its bottom-left key is how you arrive.
+        val stored = KeyPrefs.load(this).let { it.copy(hintSizeRatio = snapHint(it.hintSizeRatio)) }
+        if (stored != config) {
+            config = stored
+            setUpControls()
+            applyConfig()
+        }
         // The activity has focus, so it may read the clipboard the same way the IME does.
         val clip = (getSystemService(CLIPBOARD_SERVICE) as? ClipboardManager)?.primaryClip
         binding.keyboardPreview.clipboardText = clip?.takeIf { it.itemCount > 0 }
@@ -99,6 +107,7 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
         previewSwitch.isChecked = config.previewEnabled
         swipeSwitch.isChecked = config.spaceCursorSwipe
         doubleTapSwitch.isChecked = config.doubleTapJamo
+        autoCapsSwitch.isChecked = config.autoCapitalize
 
         spaceWidthSlider.addOnChangeListener { _, value, _ ->
             update(config.copy(spaceWidthUnits = value / 10f))
@@ -132,6 +141,9 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
         }
         doubleTapSwitch.setOnCheckedChangeListener { _, checked ->
             update(config.copy(doubleTapJamo = checked))
+        }
+        autoCapsSwitch.setOnCheckedChangeListener { _, checked ->
+            update(config.copy(autoCapitalize = checked))
         }
     }
 
@@ -257,6 +269,17 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
 
             KeyCode.TO_TEXT -> view.layer = view.textLayer
 
+            KeyCode.SETTINGS -> {
+                stopComposing()
+                view.layer = Layer.SETTINGS
+            }
+
+            // Already in the settings app — the full list is on the screen above the keyboard.
+            KeyCode.SETTINGS_APP -> {
+                stopComposing()
+                view.layer = view.textLayer
+            }
+
             KeyCode.PASTE -> {
                 val text = view.clipboardText ?: return
                 stopComposing()
@@ -284,6 +307,13 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
                 if (view.shiftState == ShiftState.ONE_SHOT) view.shiftState = ShiftState.OFF
             }
         }
+    }
+
+    /** The keyboard's own settings panel moved a value; the sliders follow it. */
+    override fun onConfigChange(newConfig: KeyboardConfig) {
+        config = newConfig
+        setUpControls()
+        applyConfig()
     }
 
     override fun onCursorMove(steps: Int) {
@@ -318,8 +348,8 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
     }
 
     private companion object {
-        /** Corner-hint slider stops, in percent of key height. The first one hides the hint. */
-        val HINT_PERCENTS = intArrayOf(0, 20, 25, 30, 35, 40, 45, 50, 55, 60)
+        /** Shared with the on-keyboard panel so both offer the same stops. */
+        val HINT_PERCENTS = KeyboardSettings.HINT_PERCENTS
     }
 
     private fun deleteBackward() {

@@ -66,6 +66,13 @@
                 android:text="@string/section_size" />
 
             <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="@string/hint_on_keyboard_panel"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
+
+            <TextView
                 android:id="@+id/spaceWidthLabel"
                 style="@style/SliderLabel" />
 
@@ -190,6 +197,17 @@
                 android:id="@+id/doubleTapSwitch"
                 style="@style/SettingSwitch"
                 android:text="@string/label_double_tap" />
+
+            <com.google.android.material.materialswitch.MaterialSwitch
+                android:id="@+id/autoCapsSwitch"
+                style="@style/SettingSwitch"
+                android:text="@string/label_auto_caps" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/hint_auto_caps"
+                android:textAppearance="?attr/textAppearanceBodySmall" />
 
             <TextView
                 android:layout_width="match_parent"

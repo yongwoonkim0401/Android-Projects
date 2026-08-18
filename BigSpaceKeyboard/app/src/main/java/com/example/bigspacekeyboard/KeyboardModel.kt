@@ -1,6 +1,8 @@
 package com.example.bigspacekeyboard
 
 import android.graphics.RectF
+import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -19,8 +21,33 @@ object KeyCode {
     const val PAGE_NEXT = -9
     const val PASTE = -10
 
+    /** Opens the settings panel drawn on the keyboard itself. */
+    const val SETTINGS = -11
+
+    /** Opens the full settings app, leaving whatever is being typed. */
+    const val SETTINGS_APP = -12
+
+    /** Inert: a settings row's name and current value. Not a key, just text in a key's place. */
+    const val LABEL = -13
+
     /** Filler for a half-empty symbol page. Draws nothing, does nothing. */
     const val NONE = -99
+
+    /**
+     * The settings panel's − / + keys. Every setting owns a pair: [SETTING_BASE] minus twice its
+     * index turns the value down, one below that turns it up. They start past [NONE] so nothing
+     * above ever collides with them however many commands get added.
+     */
+    const val SETTING_BASE = -100
+
+    fun settingDown(index: Int) = SETTING_BASE - index * 2
+    fun settingUp(index: Int) = SETTING_BASE - index * 2 - 1
+
+    /** -1 when [code] is not one of the panel's adjust keys. */
+    fun settingIndex(code: Int) = if (code > SETTING_BASE) -1 else (SETTING_BASE - code) / 2
+
+    /** Which way an adjust key moves its setting. */
+    fun settingSteps(code: Int) = if ((SETTING_BASE - code) % 2 == 0) -1 else 1
 
     const val SPACE = ' '.code
 }
@@ -28,7 +55,7 @@ object KeyCode {
 enum class KeyStyle { NORMAL, FUNCTION, SPACE, ACCENT, CLIP }
 
 enum class Layer {
-    LETTERS, HANGUL, SYMBOLS, SYMBOL_PAD;
+    LETTERS, HANGUL, SYMBOLS, SYMBOL_PAD, SETTINGS;
 
     val isText: Boolean get() = this == LETTERS || this == HANGUL
 }
@@ -59,8 +86,18 @@ data class Key(
     val respondsToAutoShift: Boolean = true,
     /** Symbol produced by holding the key down; drawn small in the key's top-right corner. */
     val longPress: String? = null,
+    /**
+     * Command sent by holding the key down, for function keys where the hold is not a character.
+     * [longPress] still supplies the corner hint, so the hold stays discoverable either way.
+     */
+    val longPressCode: Int? = null,
+    /** Right-aligned second half of a settings row's text: the setting's current value. */
+    val trailing: String? = null,
 ) {
     val isPrintable: Boolean get() = code >= 0
+
+    /** Draws, but never types: blanks on a short symbol page and the settings panel's text. */
+    val isInert: Boolean get() = code == KeyCode.NONE || code == KeyCode.LABEL
 }
 
 /**
@@ -105,6 +142,12 @@ data class KeyboardConfig(
     val vibrateStrength: Float = 0.5f,
     val spaceCursorSwipe: Boolean = true,
     val doubleTapJamo: Boolean = true,
+    /**
+     * Whether the editor's auto-capitalisation hint may arm Shift by itself. Off by default: the
+     * English layer coming up in capitals means un-shifting before nearly every word, and a
+     * keyboard guessing at case is a worse trade than typing the one capital by hand.
+     */
+    val autoCapitalize: Boolean = false,
     /** Multiplies how fast a held backspace (or page key) repeats. 1 = the default cadence. */
     val repeatSpeed: Float = 1f,
     /** How long a key must be held before it types its corner symbol. */
@@ -116,6 +159,102 @@ data class KeyboardConfig(
 
     /** Height of the tallest layer, counted in key heights. */
     val totalWeight: Float get() = KeyboardLayouts.TEXT_ROWS + spaceHeightWeight
+}
+
+/**
+ * One setting the on-keyboard panel can change.
+ *
+ * A tap moves the value to the next [stops] entry rather than adding a fixed amount, for two
+ * reasons: the stops are the same ones the settings app's sliders offer, so a value set in one
+ * place is never stranded between the other's notches, and repeated taps can't drift a float.
+ */
+class SettingSpec(
+    val name: String,
+    val stops: List<Float>,
+    private val format: (Float) -> String,
+    private val read: (KeyboardConfig) -> Float,
+    private val write: (KeyboardConfig, Float) -> KeyboardConfig,
+) {
+    fun valueOf(config: KeyboardConfig): String = format(read(config))
+
+    /** Nearest stop to the current value, moved [steps] along it. Stops at either end. */
+    fun stepped(config: KeyboardConfig, steps: Int): KeyboardConfig {
+        val current = read(config)
+        val index = stops.indices.minByOrNull { abs(stops[it] - current) } ?: return config
+        return write(config, stops[(index + steps).coerceIn(stops.indices)])
+    }
+}
+
+/**
+ * What the on-keyboard settings panel offers, in the order it shows them: the things worth
+ * changing while looking at the keyboard rather than at a settings screen. Sizes come first
+ * because this keyboard exists to get the space bar right, and the panel keeps the real space
+ * bar on screen while it is being resized.
+ *
+ * The full list — including the switches that have no meaningful "more" or "less" — stays in the
+ * settings app, one long-press further away.
+ */
+object KeyboardSettings {
+
+    /** Settings per panel page. Matches [KeyboardLayouts.TEXT_ROWS]: one setting per row. */
+    const val ROWS = 4
+
+    /** Corner-hint stops, in percent of key height. The first one hides the hint. */
+    val HINT_PERCENTS = intArrayOf(0, 20, 25, 30, 35, 40, 45, 50, 55, 60)
+
+    private fun stops(from: Float, to: Float, step: Float): List<Float> {
+        val count = ((to - from) / step).roundToInt()
+        return (0..count).map { from + it * step }
+    }
+
+    private fun percent(value: Float) =
+        if (value <= 0f) "끔" else "${(value * 100f).roundToInt()}%"
+
+    private fun decimals(digits: Int, unit: String): (Float) -> String =
+        { String.format(Locale.US, "%.${digits}f$unit", it) }
+
+    val SPECS: List<SettingSpec> = listOf(
+        SettingSpec(
+            "스페이스바 폭", stops(4f, 8f, 0.5f), decimals(1, "칸"),
+            { it.spaceWidthUnits }, { c, v -> c.copy(spaceWidthUnits = v) },
+        ),
+        SettingSpec(
+            "스페이스바 높이", stops(1f, 2.2f, 0.1f), decimals(1, "배"),
+            { it.spaceHeightWeight }, { c, v -> c.copy(spaceHeightWeight = v) },
+        ),
+        SettingSpec(
+            "키 높이", stops(0.8f, 1.4f, 0.05f), decimals(2, "배"),
+            { it.keyHeightRatio }, { c, v -> c.copy(keyHeightRatio = v) },
+        ),
+        SettingSpec(
+            "기호 힌트", HINT_PERCENTS.map { it / 100f },
+            { if (it <= 0f) "숨김" else percent(it) },
+            { it.hintSizeRatio }, { c, v -> c.copy(hintSizeRatio = v) },
+        ),
+        SettingSpec(
+            "키 소리", stops(0f, 1f, 0.1f), ::percent,
+            { it.soundVolume }, { c, v -> c.copy(soundVolume = v) },
+        ),
+        SettingSpec(
+            "진동 세기", stops(0f, 1f, 0.1f), ::percent,
+            { it.vibrateStrength }, { c, v -> c.copy(vibrateStrength = v) },
+        ),
+        SettingSpec(
+            "길게 누르기", stops(150f, 600f, 50f), { "${it.roundToInt()}ms" },
+            { it.longPressMs.toFloat() }, { c, v -> c.copy(longPressMs = v.roundToInt()) },
+        ),
+        SettingSpec(
+            "백스페이스 속도", stops(0.5f, 2f, 0.25f), { "${(it * 100f).roundToInt()}%" },
+            { it.repeatSpeed }, { c, v -> c.copy(repeatSpeed = v) },
+        ),
+    )
+
+    /** Page names, shown on the space bar the way the symbol pad shows its category. */
+    val PAGE_NAMES = listOf("키 크기", "반응")
+
+    val pageCount: Int get() = (SPECS.size + ROWS - 1) / ROWS
+
+    fun pageName(page: Int) = PAGE_NAMES.getOrElse(page) { "설정" }
 }
 
 object KeyboardLayouts {
@@ -200,12 +339,26 @@ object KeyboardLayouts {
     private fun backspaceKey(width: Float = 1.5f) =
         Key(KeyCode.BACKSPACE, width = width, style = KeyStyle.FUNCTION, repeatable = true)
 
-    private fun textLayerKey(textLayer: Layer, width: Float) = Key(
+    private fun textLayerKey(
+        textLayer: Layer,
+        width: Float,
+        hold: Int = KeyCode.SETTINGS,
+    ) = Key(
         KeyCode.TO_TEXT,
         if (textLayer == Layer.HANGUL) "한글" else "ABC",
         width = width,
         style = KeyStyle.FUNCTION,
+        longPress = SETTINGS_HINT,
+        longPressCode = hold,
     )
+
+    /**
+     * Holding the bottom-left key opens the settings panel. It goes there because that corner is
+     * the one function key every layer has in the same place, so the way in never moves — and
+     * because a key of its own would have to come out of the space bar's width, which is the one
+     * thing this keyboard will not trade.
+     */
+    const val SETTINGS_HINT = "⚙"
 
     /**
      * Bottom row. Three things happen here.
@@ -271,9 +424,10 @@ object KeyboardLayouts {
         page: SymbolCatalog.Page?,
         clipboard: CharSequence? = null,
         scrollRow: Int = 0,
+        settingsPage: Int = 0,
     ): List<KeyRow> =
         (if (clipboard != null) listOf(clipRow(clipboard)) else emptyList()) +
-            keyRowsFor(layer, config, textLayer, page, scrollRow)
+            keyRowsFor(layer, config, textLayer, page, scrollRow, settingsPage)
 
     private fun keyRowsFor(
         layer: Layer,
@@ -281,6 +435,7 @@ object KeyboardLayouts {
         textLayer: Layer,
         page: SymbolCatalog.Page?,
         scrollRow: Int,
+        settingsPage: Int,
     ): List<KeyRow> = when (layer) {
 
         Layer.LETTERS -> listOf(
@@ -326,10 +481,62 @@ object KeyboardLayouts {
         )
 
         Layer.SYMBOL_PAD -> symbolPadRows(config, textLayer, page, scrollRow)
+
+        Layer.SETTINGS -> settingsRows(config, textLayer, settingsPage)
+    }
+
+    /**
+     * The settings panel. One setting per row — name and value on the left, − and + on the
+     * right — over an untouched bottom row, so the space bar being resized is the real one,
+     * at its real size, right where it always is.
+     */
+    private fun settingsRows(
+        config: KeyboardConfig,
+        textLayer: Layer,
+        settingsPage: Int,
+    ): List<KeyRow> {
+        val first = settingsPage * KeyboardSettings.ROWS
+        val rows = (0 until KeyboardSettings.ROWS).map { row ->
+            val index = first + row
+            val spec = KeyboardSettings.SPECS.getOrNull(index)
+                ?: return@map KeyRow(listOf(Key(KeyCode.NONE, width = STANDARD_UNITS)))
+            KeyRow(
+                listOf(
+                    Key(
+                        KeyCode.LABEL, spec.name, width = 7f,
+                        trailing = spec.valueOf(config),
+                    ),
+                    Key(
+                        KeyCode.settingDown(index), "−", width = 1.5f,
+                        style = KeyStyle.FUNCTION, repeatable = true,
+                    ),
+                    Key(
+                        KeyCode.settingUp(index), "+", width = 1.5f,
+                        style = KeyStyle.FUNCTION, repeatable = true,
+                    ),
+                )
+            )
+        }
+        return rows + bottomRow(
+            config,
+            listOf(
+                // Already in the panel, so holding this key goes one step further out.
+                textLayerKey(textLayer, 1.25f, hold = KeyCode.SETTINGS_APP),
+                Key(KeyCode.PAGE_PREV, "◀", width = 1.125f, style = KeyStyle.FUNCTION),
+                Key(KeyCode.PAGE_NEXT, "▶", width = 1.125f, style = KeyStyle.FUNCTION),
+            ),
+            listOf(
+                backspaceKey(width = 1f),
+                Key(KeyCode.ENTER, width = 1.5f, style = KeyStyle.ACCENT),
+            ),
+        )
     }
 
     private fun textBottomLeft() = listOf(
-        Key(KeyCode.TO_SYMBOLS, "?123", width = 1.25f, style = KeyStyle.FUNCTION),
+        Key(
+            KeyCode.TO_SYMBOLS, "?123", width = 1.25f, style = KeyStyle.FUNCTION,
+            longPress = SETTINGS_HINT, longPressCode = KeyCode.SETTINGS,
+        ),
         Key(KeyCode.LANGUAGE, "한/영", width = 1.25f, style = KeyStyle.FUNCTION),
         Key(','.code, ",", width = 1f),
     )
