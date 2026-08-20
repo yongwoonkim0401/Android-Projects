@@ -206,8 +206,18 @@ class KeyboardView @JvmOverloads constructor(
     private var holdRunnable: Runnable? = null
     private var holdPointerId = -1
 
-    /** How far the finger must travel on the space bar to move the cursor one character. */
-    private var swipeStep = dp(24f)
+    /**
+     * The space-bar drag has two distances, and they pull in opposite directions.
+     *
+     * [swipeSlop] is how far the finger must travel before the drag counts as a drag at all. It is
+     * deliberately large: this keyboard exists because the space bar gets hit imprecisely, and a
+     * thumb that skids a few millimetres while tapping it must still produce a space.
+     *
+     * [swipeStep] is the distance per character once the gesture has been recognised, and it is
+     * small, because by then the intent is not in doubt and the drag should track the finger.
+     */
+    private val swipeSlop = dp(26f)
+    private val swipeStep = dp(11f)
 
     /** Vertical extent of the scrollable symbol grid, filled in by [place]. */
     private var gridTop = 0f
@@ -354,7 +364,6 @@ class KeyboardView @JvmOverloads constructor(
             top += rowHeight
         }
 
-        swipeStep = availableWidth / 10f
     }
 
     // ----------------------------------------------------------------- touch
@@ -432,13 +441,19 @@ class KeyboardView @JvmOverloads constructor(
         if (scrollGrid(pointerId, touch, y)) return
 
         if (key.code == KeyCode.SPACE && config.spaceCursorSwipe) {
+            if (!touch.swiped) {
+                if (abs(x - touch.anchorX) < swipeSlop) return
+                touch.swiped = true
+                // Counting restarts where the gesture was recognised, one step back, so crossing
+                // the slop moves exactly one character instead of a whole slop's worth at once.
+                touch.anchorX = x - if (x > touch.anchorX) swipeStep else -swipeStep
+            }
             var delta = x - touch.anchorX
             while (abs(delta) >= swipeStep) {
                 val steps = if (delta > 0) 1 else -1
                 actionListener?.onCursorMove(steps)
                 touch.anchorX += swipeStep * steps
                 delta = x - touch.anchorX
-                touch.swiped = true
             }
             return
         }
@@ -618,8 +633,11 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     private fun playClick(key: Key) {
-        val volume = config.soundVolume
-        if (volume <= 0f) return
+        if (config.soundVolume <= 0f) return
+        // The setting is halved on the way out. The whole slider was too loud — its lowest step
+        // was already more than a keypress wants — so the range was rescaled rather than the
+        // stops renumbered, which keeps 100% meaning "as loud as this keyboard goes".
+        val volume = config.soundVolume * SOUND_SCALE
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
         val effect = when (key.code) {
             KeyCode.SPACE -> AudioManager.FX_KEYPRESS_SPACEBAR
@@ -945,5 +963,8 @@ class KeyboardView @JvmOverloads constructor(
         /** Repeat cadence at speed 1.0: first fire after this, accelerating down to the floor. */
         const val REPEAT_START_MS = 400f
         const val REPEAT_FLOOR_MS = 45f
+
+        /** What the key-sound setting is worth at the speaker. See [playClick]. */
+        const val SOUND_SCALE = 0.5f
     }
 }

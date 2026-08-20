@@ -11,7 +11,31 @@ import android.text.InputType
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Whether a reported caret position is one this keyboard put there.
+ *
+ * Every composing update it makes leaves the caret collapsed at the **end of the composing
+ * region** — `setComposingText(text, 1)` says exactly that. So that one position, and only that
+ * one, is the keyboard's own. A caret anywhere else, a range selected, or the composing region
+ * gone altogether all mean the same thing: somebody moved it, which in practice means the user
+ * tapped into the middle of what they had written.
+ *
+ * That distinction matters because a composing region is not a cursor. It stays where it was put
+ * until the keyboard gives it up, so writing the next jamo into it would place the letter back at
+ * the end of the text and take the caret along — which looks exactly like a tap that did nothing.
+ */
+internal fun isOwnCaretPosition(
+    selectionStart: Int,
+    selectionEnd: Int,
+    composingStart: Int,
+    composingEnd: Int,
+): Boolean = composingStart >= 0 && selectionStart == selectionEnd && selectionEnd == composingEnd
 
 /** The input method itself; all rendering and gesture work lives in [KeyboardView]. */
 class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionListener {
@@ -24,6 +48,10 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
     private val clipListener = ClipboardManager.OnPrimaryClipChangedListener { refreshClipboard() }
     private var listeningToClipboard = false
     private var savedSymbolPage = -1
+
+    /** Where the editor last said its cursor was. -1 means it has not said. */
+    private var selectionStart = -1
+    private var selectionEnd = -1
 
     override fun onCreate() {
         super.onCreate()
@@ -86,6 +114,10 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         hangul.reset()
+        // The first onUpdateSelection may not arrive until something is typed, so the drag needs
+        // the starting position the editor hands over here.
+        selectionStart = info?.initialSelStart ?: -1
+        selectionEnd = info?.initialSelEnd ?: -1
         val config = currentConfig()
         hangul.doubleTapEnabled = config.doubleTapJamo
         keyboardView.config = config
@@ -145,10 +177,18 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
         super.onUpdateSelection(
             oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd
         )
-        // While we compose, the editor reports our composing span. If it is gone but we still
-        // think we are composing, the cursor was moved from outside — drop the half-built syllable
-        // so the next jamo does not get pasted back at the old spot.
-        if (hangul.isComposing && candidatesStart < 0) hangul.reset()
+        selectionStart = newSelStart
+        selectionEnd = newSelEnd
+
+        // Tapping into the middle of what was typed has to end the syllable being composed, and
+        // has to say so to the editor. Leaving the composing region behind is what makes the next
+        // jamo land back at the end of the text, dragging the caret with it.
+        if (hangul.isComposing &&
+            !isOwnCaretPosition(newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        ) {
+            hangul.reset()
+            currentInputConnection?.finishComposingText()
+        }
         updateShiftState()
     }
 
@@ -261,10 +301,62 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
         requestHideSelf(0)
     }
 
+    /**
+     * Space-bar drag. The caret is moved by setting the selection outright rather than by sending
+     * arrow keys: an arrow key is a *navigation* event, and plenty of apps — anything with focus
+     * traversal, WebViews, Compose screens — spend it on moving focus to the next widget instead
+     * of on the caret, so the drag would silently do nothing there. Setting the selection asks the
+     * editor for exactly the one thing meant.
+     */
     override fun onCursorMove(steps: Int) {
-        currentInputConnection?.let { finishHangul(it) }
+        val ic = currentInputConnection ?: return
+        finishHangul(ic)
+        if (moveCaret(ic, steps)) return
+
+        // Only for editors that will not say where their cursor is; there is nothing else to go on.
         val keyCode = if (steps > 0) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
-        repeat(kotlin.math.abs(steps)) { sendDownUpKeyEvents(keyCode) }
+        repeat(abs(steps)) { sendDownUpKeyEvents(keyCode) }
+    }
+
+    /** False when the editor's cursor position is unknown, so the caller can fall back. */
+    private fun moveCaret(ic: InputConnection, steps: Int): Boolean {
+        val (left, right, end) = caretBounds(ic) ?: return false
+        val target = (if (steps < 0) left + steps else right + steps).coerceIn(0, end)
+
+        if (target == selectionStart && target == selectionEnd) return true
+        if (!ic.setSelection(target, target)) return false
+        // Assumed rather than awaited: onUpdateSelection arrives a frame or two later, and a drag
+        // produces the next step before then.
+        selectionStart = target
+        selectionEnd = target
+        return true
+    }
+
+    /**
+     * Selection edges and the end of the text, all absolute.
+     *
+     * Asked of the editor rather than taken from [selectionStart]: `onUpdateSelection` arrives
+     * a beat after the edit that caused it, so a character typed just before the drag started
+     * would leave the remembered position one behind — and the caret would jump backwards on the
+     * first step. Two binder calls a step, the same as the arrow keys this replaced.
+     */
+    private fun caretBounds(ic: InputConnection): Triple<Int, Int, Int>? {
+        val extracted = ic.getExtractedText(ExtractedTextRequest(), 0)
+        val text = extracted?.text
+        if (text != null && extracted.selectionStart >= 0 && extracted.selectionEnd >= 0) {
+            val base = extracted.startOffset
+            return Triple(
+                base + min(extracted.selectionStart, extracted.selectionEnd),
+                base + max(extracted.selectionStart, extracted.selectionEnd),
+                base + text.length,
+            )
+        }
+
+        // Editors that will not extract their text still report selection changes.
+        if (selectionStart < 0 || selectionEnd < 0) return null
+        val right = max(selectionStart, selectionEnd)
+        val ahead = ic.getTextAfterCursor(MAX_CARET_STEP, 0)?.length ?: return null
+        return Triple(min(selectionStart, selectionEnd), right, right + ahead)
     }
 
     // ---------------------------------------------------------------- hangul
@@ -376,5 +468,8 @@ class BigSpaceKeyboardService : InputMethodService(), KeyboardView.OnKeyboardAct
 
     private companion object {
         const val DOUBLE_TAP_MS = 400L
+
+        /** How far past the cursor to look for room when the editor will not extract its text. */
+        const val MAX_CARET_STEP = 4
     }
 }

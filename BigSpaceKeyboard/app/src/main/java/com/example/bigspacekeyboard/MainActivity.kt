@@ -38,6 +38,9 @@ class MainActivity : AppCompatActivity(), KeyboardView.OnKeyboardActionListener 
 
         binding.testInput.showSoftInputOnFocus = false
         binding.testInput.requestFocus()
+        // Same rule as the real keyboard: tapping into the text ends the syllable being composed,
+        // otherwise the next jamo would rewrite the character at the old spot.
+        binding.testInput.setOnClickListener { stopComposing() }
         binding.keyboardPreview.actionListener = this
         binding.keyboardPreview.textLayer = KeyPrefs.loadTextLayer(this)
         binding.keyboardPreview.layer = binding.keyboardPreview.textLayer
